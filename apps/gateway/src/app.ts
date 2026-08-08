@@ -1,10 +1,10 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import compression from "compression";
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import { resolveDashboardDir } from "./dashboard-path.js";
 import { logger } from "./logger";
 import { auth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -85,17 +85,49 @@ app.use("/", router);
 
 app.use(errorHandler);
 
-// In production, serve the dashboard as static files from the same process
-const dashboardDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../dashboard/dist/public",
-);
-app.use(express.static(dashboardDir));
-// SPA fallback: serve index.html for any unmatched route (client-side routing)
-app.use((_req, res, next) => {
-  res.sendFile(path.join(dashboardDir, "index.html"), (err) => {
-    if (err) next();
+// In production (and local gateway-only runs), serve the dashboard SPA from
+// the same process. Dev usually uses Vite on :5173 instead.
+const dashboardDir = resolveDashboardDir();
+if (dashboardDir) {
+  logger.info({ dashboardDir }, "serving dashboard static files");
+  app.use(express.static(dashboardDir));
+  // SPA fallback: serve index.html for any unmatched route (client-side routing)
+  app.use((_req, res, next) => {
+    res.sendFile(path.join(dashboardDir, "index.html"), (err) => {
+      if (err) next(err);
+    });
   });
-});
+} else {
+  logger.warn(
+    "dashboard build not found (apps/dashboard/dist/public). GET / will not serve the UI. Run `pnpm --filter @freellm/dashboard build` or use Vite on :5173.",
+  );
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      next();
+      return;
+    }
+    if (req.path.startsWith("/v1") || req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    res
+      .status(503)
+      .type("html")
+      .send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>FreeLLM — dashboard not built</title>
+<style>
+  body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0f1117;color:#e8e6dc;padding:3rem;line-height:1.5}
+  code{background:#1a1d27;padding:.15rem .4rem;border-radius:4px}
+  a{color:#3ecf8e}
+</style></head><body>
+  <h1>Dashboard not built</h1>
+  <p>The gateway is running, but <code>apps/dashboard/dist/public</code> is missing.</p>
+  <p>Build it, then restart:</p>
+  <p><code>pnpm --filter @freellm/dashboard build</code></p>
+  <p>Or in local development open the Vite app at <a href="http://localhost:5173">http://localhost:5173</a>.</p>
+  <p>API health: <a href="/healthz">/healthz</a></p>
+</body></html>`);
+  });
+}
 
 export default app;

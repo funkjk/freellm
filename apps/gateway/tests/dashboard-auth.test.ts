@@ -34,20 +34,22 @@ beforeAll(async () => {
 });
 
 describe("dashboard static paths stay unauthenticated", () => {
-  it("does not require Authorization for GET /", async () => {
+  it("serves the dashboard HTML for GET / without Authorization", async () => {
     const res = await request(app).get("/");
-    expect(res.status).not.toBe(401);
-    expect(res.body?.error?.code).not.toBe("missing_api_key");
+    expect(res.status).toBe(200);
+    expect(res.type).toMatch(/html/);
+    expect(res.text).toMatch(/FreeLLM|root|id="root"/i);
   });
 
-  it("does not require Authorization for SPA route /models", async () => {
+  it("serves SPA fallback for /models without Authorization", async () => {
     const res = await request(app).get("/models");
-    expect(res.status).not.toBe(401);
-    expect(res.body?.error?.code).not.toBe("missing_api_key");
+    expect(res.status).toBe(200);
+    expect(res.type).toMatch(/html/);
   });
 
-  it("does not require Authorization for asset-like paths", async () => {
+  it("does not require Authorization for missing asset paths", async () => {
     const res = await request(app).get("/assets/index-abc123.js");
+    // 404 from static is fine; must not be auth rejection
     expect(res.status).not.toBe(401);
     expect(res.body?.error?.code).not.toBe("missing_api_key");
   });
