@@ -18,9 +18,19 @@ async function safeUpstreamMessage(
   fallback: string,
 ): Promise<string> {
   try {
-    const body = await (response as globalThis.Response).json();
-    const msg = (body as { error?: { message?: unknown } })?.error?.message;
-    return typeof msg === "string" ? redactSecrets(msg) : fallback;
+    const body = (await (response as globalThis.Response).json()) as {
+      error?: { message?: unknown };
+      message?: unknown;
+    };
+    // OpenAI-shaped: { error: { message } }
+    const nested = body?.error?.message;
+    if (typeof nested === "string" && nested.length > 0) return redactSecrets(nested);
+    // Google sometimes returns { error: { message, status, code } } already covered,
+    // or a top-level message string.
+    if (typeof body?.message === "string" && body.message.length > 0) {
+      return redactSecrets(body.message);
+    }
+    return fallback;
   } catch {
     return fallback;
   }

@@ -5,8 +5,8 @@
  * mapRequest method directly (via a tiny subclass that exposes it) and
  * assert the output shape. See tests/router.test.ts for the end-to-end
  * flow through the router, and scripts ran against the real gateway
- * for the empirical proof that the per-model reasoning_effort default
- * actually fixes the truncation.
+ * for the empirical proof that omitting Flash reasoning_effort (and not
+ * sending "none") avoids Google's INVALID_ARGUMENT 400.
  */
 import { describe, expect, it } from "vitest";
 import { GeminiProvider, defaultReasoningEffortFor } from "../src/providers/gemini.js";
@@ -32,10 +32,10 @@ function baseRequest(overrides: Partial<ChatCompletionRequest> = {}): ChatComple
 }
 
 describe("defaultReasoningEffortFor", () => {
-  it("returns 'none' for flash models (accept zero thinking budget)", () => {
-    expect(defaultReasoningEffortFor("gemini-2.5-flash")).toBe("none");
-    expect(defaultReasoningEffortFor("gemini-flash-latest")).toBe("none");
-    expect(defaultReasoningEffortFor("gemini-flash-lite-latest")).toBe("none");
+  it("returns undefined for flash models (omit field; Google rejects 'none')", () => {
+    expect(defaultReasoningEffortFor("gemini-2.5-flash")).toBeUndefined();
+    expect(defaultReasoningEffortFor("gemini-flash-latest")).toBeUndefined();
+    expect(defaultReasoningEffortFor("gemini-flash-lite-latest")).toBeUndefined();
   });
 
   it("returns 'low' for pro models (reject 'none' with HTTP 400)", () => {
@@ -50,11 +50,11 @@ describe("defaultReasoningEffortFor", () => {
 });
 
 describe("GeminiProvider.mapRequest reasoning_effort default", () => {
-  it("injects 'none' on gemini-flash-latest when the caller did not set one", () => {
+  it("omits reasoning_effort on gemini-flash-latest when the caller did not set one", () => {
     const mapped = gemini().exposeMapRequest(
       baseRequest({ model: "gemini/gemini-flash-latest", max_tokens: 1000 }),
     );
-    expect(mapped.reasoning_effort).toBe("none");
+    expect(mapped.reasoning_effort).toBeUndefined();
   });
 
   it("injects 'low' on gemini-pro-latest when the caller did not set one", () => {
@@ -71,7 +71,7 @@ describe("GeminiProvider.mapRequest reasoning_effort default", () => {
     expect(mapped.reasoning_effort).toBe("high");
   });
 
-  it("respects an explicit 'none' from the caller on pro (caller accepts the upstream 400)", () => {
+  it("strips explicit 'none' because Google rejects it with INVALID_ARGUMENT", () => {
     const mapped = gemini().exposeMapRequest(
       baseRequest({
         model: "gemini/gemini-pro-latest",
@@ -79,7 +79,7 @@ describe("GeminiProvider.mapRequest reasoning_effort default", () => {
         max_tokens: 1000,
       }),
     );
-    expect(mapped.reasoning_effort).toBe("none");
+    expect(mapped.reasoning_effort).toBeUndefined();
   });
 });
 

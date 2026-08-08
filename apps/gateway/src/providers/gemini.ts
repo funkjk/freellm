@@ -4,42 +4,21 @@ import { BaseProvider, parseApiKeys } from "./base.js";
 /**
  * Gemini OpenAI-compatibility adapter.
  *
- * Three non-obvious translations live here because Google's OpenAI-compat
- * endpoint does not quite match the OpenAI Chat Completions contract:
+ * Non-obvious translations because Google's OpenAI-compat endpoint does not
+ * quite match the OpenAI Chat Completions contract:
  *
- * 1. **Reasoning models eat the output budget.** Gemini Flash and Pro
- *    reasoning models spend the majority of `max_tokens` on internal
- *    thinking before producing visible output by default, which leaves
- *    callers with 30-150 tokens no matter how large they set the cap.
- *    We inject a per-model `reasoning_effort` default that keeps thinking
- *    from starving the visible response. Callers that explicitly send a
- *    value keep it.
- *
- *    Per-model defaults (empirically derived against the live API):
- *      - gemini-2.5-flash / gemini-flash-latest -> "none"
- *        (Flash accepts zero thinking budget and returns the full
- *        requested output)
- *      - gemini-2.5-pro / gemini-pro-latest -> "low"
- *        (Pro rejects "none" with a 400 "Budget 0 is invalid. This
- *        model only works in thinking mode." "low" is the minimum
- *        Google accepts for this model.)
+ * 1. **reasoning_effort.** Pro models need a non-zero thinking budget, so we
+ *    default unset requests to `"low"`. Flash models: do NOT send a default.
+ *    Google now rejects `"none"` with HTTP 400 INVALID_ARGUMENT
+ *    ("Request contains an invalid argument."). Omitting the field matches
+ *    the working OpenAI-compat path. Explicit `"none"` from callers is
+ *    stripped on the way out for the same reason.
  *
  * 2. **Exactly one of `max_tokens` / `max_completion_tokens`.** Gemini's
- *    OpenAI-compat endpoint returns a 400 "max_tokens and
- *    max_completion_tokens cannot both be set" when both are present.
- *    The documented field for reasoning models is
- *    `max_completion_tokens`, so we normalize: if the caller sent
- *    `max_tokens`, rename it to `max_completion_tokens` and drop the
- *    original. If the caller sent both, prefer the explicit
- *    `max_completion_tokens` and drop the other.
+ *    OpenAI-compat endpoint returns a 400 when both are present. Prefer
+ *    `max_completion_tokens` and drop `max_tokens`.
  *
- * 3. **Catalog prefers floating `-latest` aliases.** Google pins
- *    `gemini-flash-latest` / `gemini-pro-latest` / `gemini-flash-lite-latest`
- *    to the current Flash / Pro / Flash-Lite release. The 2.5 family
- *    remains listed for callers that still pin those ids (shutdown
- *    October 16, 2026). Deprecated 2.0 models stay out of the catalog.
- *
- * Everything else flows through the base mapRequest untouched.
+ * 3. **Catalog prefers floating `-latest` aliases.**
  */
 export class GeminiProvider extends BaseProvider {
   readonly id = "gemini";
@@ -101,18 +80,22 @@ export class GeminiProvider extends BaseProvider {
     const mapped = super.mapRequest(request);
 
     // Per-model reasoning_effort default. The base mapRequest already
-    // stripped the "gemini/" prefix so `mapped.model` is the raw model
-    // id Gemini expects ("gemini-flash-latest", "gemini-2.5-pro", etc.).
+    // stripped the "gemini/" prefix so `mapped.model` is the raw model id.
     if (mapped.reasoning_effort === undefined) {
-      mapped.reasoning_effort = defaultReasoningEffortFor(mapped.model);
+      const effort = defaultReasoningEffortFor(mapped.model);
+      if (effort !== undefined) {
+        mapped.reasoning_effort = effort;
+      }
+    }
+
+    // Google rejects reasoning_effort: "none" with 400 INVALID_ARGUMENT.
+    // Drop it so Flash (and mistaken Pro "none") still reach the model.
+    if (mapped.reasoning_effort === "none") {
+      (mapped as { reasoning_effort?: ChatCompletionRequest["reasoning_effort"] }).reasoning_effort =
+        undefined;
     }
 
     // Normalize the output budget to max_completion_tokens only.
-    // Gemini OpenAI-compat returns 400 when both max_tokens and
-    // max_completion_tokens are present, so we must carry exactly one.
-    // Strategy: prefer max_completion_tokens when set; otherwise lift
-    // max_tokens into it. Delete max_tokens on the outgoing request
-    // in either case so Gemini never sees both.
     if (mapped.max_completion_tokens == null && mapped.max_tokens != null) {
       mapped.max_completion_tokens = mapped.max_tokens;
     }
@@ -125,20 +108,16 @@ export class GeminiProvider extends BaseProvider {
 }
 
 /**
- * Exported for tests. Returns the default reasoning effort Gemini
- * should receive when the caller did not set one. Falls back to "low"
- * for unknown model ids as a conservative default that is accepted by
- * every current Gemini model.
+ * Exported for tests. Returns the default reasoning effort Gemini should
+ * receive when the caller did not set one, or `undefined` to omit the field.
  */
-export function defaultReasoningEffortFor(modelId: string): "none" | "low" | "medium" | "high" {
-  // Pro requires a non-zero thinking budget, so the smallest value
-  // it will accept is "low". Falling below that returns 400.
+export function defaultReasoningEffortFor(
+  modelId: string,
+): "low" | "medium" | "high" | undefined {
+  // Pro requires a non-zero thinking budget; "low" is the minimum accepted.
   if (modelId.includes("pro")) return "low";
-  // Flash (including gemini-flash-latest and 2.5-flash) accepts "none"
-  // and returns the full requested output. Flash-Lite follows the same
-  // zero-budget path.
-  if (modelId.includes("flash")) return "none";
-  // Any future reasoning model: "low" is the safe conservative choice
-  // because every Gemini reasoning model accepts at least "low".
+  // Flash: omit the field. Sending "none" is rejected by Google as of 2026-08.
+  if (modelId.includes("flash")) return undefined;
+  // Unknown reasoning models: "low" is the conservative accepted default.
   return "low";
 }
