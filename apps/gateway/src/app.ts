@@ -5,13 +5,13 @@ import express, { type Express, type Request } from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { resolveDashboardDir } from "./dashboard-path.js";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 import { auth } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { identifierLimit } from "./middleware/identifier-limit.js";
 import { clientRateLimit } from "./middleware/rate-limit.js";
 import { requestId } from "./middleware/request-id.js";
-import router from "./routes";
+import router from "./routes/index.js";
 
 const app: Express = express();
 

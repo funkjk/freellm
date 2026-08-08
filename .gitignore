@@ -1,6 +1,9 @@
 node_modules/
 dist/
 apps/gateway/public/
+# Full serverless bundles written by build:vercel (overwrites any stub).
+/api/index.js
+apps/gateway/api/index.js
 .env
 *.tsbuildinfo
 .turbo/

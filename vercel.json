@@ -12,8 +12,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
-      "includeFiles": "apps/gateway/dist/**"
+      "maxDuration": 60
     }
   }
 }

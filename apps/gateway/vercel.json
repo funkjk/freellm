@@ -13,8 +13,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
-      "includeFiles": "dist/**"
+      "maxDuration": 60
     }
   }
 }
