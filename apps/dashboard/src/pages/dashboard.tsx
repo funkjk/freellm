@@ -4,20 +4,31 @@ import {
   useResetProviderCircuitBreaker,
   useUpdateRoutingStrategy,
 } from "@/api/hooks";
+import { ApiKeyGate } from "@/components/api-key-gate";
 import { BrowserTokensCard } from "@/components/browser-tokens-card";
 import { MetricsRow } from "@/components/metrics-row";
 import { ProviderCard } from "@/components/provider-card";
 import { RequestTable } from "@/components/request-table";
 import { RoutingToggle } from "@/components/routing-toggle";
 import { VirtualKeysPanel } from "@/components/virtual-keys-panel";
+import { isAuthError } from "@/lib/api-key";
 import { useQueryClient } from "@tanstack/react-query";
 import { Server } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const { data: status, isLoading } = useGetGatewayStatus({
-    query: { refetchInterval: 3000, queryKey: getGetGatewayStatusQueryKey() },
+  const {
+    data: status,
+    isLoading,
+    isError,
+    error,
+  } = useGetGatewayStatus({
+    query: {
+      refetchInterval: 3000,
+      queryKey: getGetGatewayStatusQueryKey(),
+      retry: (failureCount, err) => !isAuthError(err) && failureCount < 2,
+    },
   });
 
   const resetCircuitBreaker = useResetProviderCircuitBreaker({
@@ -26,7 +37,10 @@ export default function Dashboard() {
         toast.success("Circuit breaker reset");
         queryClient.invalidateQueries({ queryKey: getGetGatewayStatusQueryKey() });
       },
-      onError: () => toast.error("Failed to reset circuit breaker"),
+      onError: (err) =>
+        toast.error(
+          isAuthError(err) ? "API key required or invalid" : "Failed to reset circuit breaker",
+        ),
     },
   });
 
@@ -35,8 +49,15 @@ export default function Dashboard() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetGatewayStatusQueryKey() });
       },
+      onError: (err) => {
+        if (isAuthError(err)) toast.error("API key required or invalid");
+      },
     },
   });
+
+  if (isAuthError(error)) {
+    return <ApiKeyGate />;
+  }
 
   if (isLoading && !status) {
     return (
@@ -47,6 +68,17 @@ export default function Dashboard() {
           <div className="h-32 bg-card rounded-lg" />
           <div className="h-32 bg-card rounded-lg" />
         </div>
+      </div>
+    );
+  }
+
+  if (isError && !status) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6">
+        <h2 className="font-mono font-semibold">Failed to load gateway status</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Check that the gateway is running and reachable at this origin.
+        </p>
       </div>
     );
   }

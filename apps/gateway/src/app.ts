@@ -70,8 +70,9 @@ app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 // Per-client rate limiting (by IP)
 app.use(clientRateLimit);
 
-// API key auth: only enforced when FREELLM_API_KEY is set OR virtual keys
-// are loaded. Auth populates req.virtualKey for chat route cap enforcement.
+// API key auth: only enforced for /v1 and /api routes when FREELLM_API_KEY
+// is set OR virtual keys are loaded. Dashboard static assets stay public so
+// browsers can load the SPA; the UI attaches Bearer for subsequent API calls.
 app.use(auth);
 
 // Per-identifier rate limit runs AFTER auth so it only sees authenticated

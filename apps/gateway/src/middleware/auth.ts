@@ -9,6 +9,7 @@ import {
   verifyBrowserToken,
 } from "../features/browser-tokens.js";
 import { type VirtualKey, getVirtualKeyStore } from "../features/virtual-keys.js";
+import { isApiPath, isHealthPath } from "./paths.js";
 
 /** Hash a string to a fixed-length buffer for timing-safe comparison. */
 function hashKey(key: string): Buffer {
@@ -45,6 +46,9 @@ declare global {
  *
  * If neither auth source is configured, requests pass through (local
  * dev mode). The server logs a warning at boot for this case.
+ *
+ * Non-API paths (dashboard static assets, SPA client routes) always pass
+ * through: browsers cannot send Authorization on a normal navigation.
  */
 export function auth(req: Request, _res: Response, next: NextFunction): void {
   const requiredKey = process.env.FREELLM_API_KEY;
@@ -53,7 +57,15 @@ export function auth(req: Request, _res: Response, next: NextFunction): void {
   const hasVirtualKeys = virtualKeyStore.size() > 0;
 
   // Health check is always unauthenticated so Docker HEALTHCHECK works.
-  if (req.path === "/healthz" || req.path === "/api/healthz") {
+  if (isHealthPath(req.path)) {
+    next();
+    return;
+  }
+
+  // Dashboard static assets / SPA routes: browsers cannot send Authorization
+  // on a normal page load. API calls still require a key (the dashboard UI
+  // attaches Bearer after the operator pastes it).
+  if (!isApiPath(req.path)) {
     next();
     return;
   }

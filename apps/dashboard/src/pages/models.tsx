@@ -1,6 +1,8 @@
 import { getListModelsQueryKey, useListModels } from "@/api/hooks";
+import { ApiKeyGate } from "@/components/api-key-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { isAuthError } from "@/lib/api-key";
 import { cn } from "@/lib/utils";
 import { Check, Copy, Search } from "lucide-react";
 import { useState } from "react";
@@ -37,12 +39,23 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 export default function Models() {
   const [search, setSearch] = useState("");
-  const { data: models, isLoading } = useListModels({
+  const {
+    data: models,
+    isLoading,
+    error,
+  } = useListModels({
     query: {
       refetchInterval: 30000,
       queryKey: getListModelsQueryKey(),
+      retry: (failureCount, err) => !isAuthError(err) && failureCount < 2,
     },
   });
+
+  if (isAuthError(error)) {
+    return (
+      <ApiKeyGate description="Enter FREELLM_API_KEY (or FREELLM_ADMIN_KEY) to list models." />
+    );
+  }
 
   const allModels = models?.data ?? [];
 

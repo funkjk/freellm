@@ -5,6 +5,7 @@ import type { VirtualKeysResponse } from "@/api/schemas";
  * recently added endpoint and we would rather not regenerate the whole
  * client for a single read-only route.
  */
+import { getAuthHeaders } from "@/lib/api-key";
 import { useQuery } from "@tanstack/react-query";
 
 const VIRTUAL_KEYS_URL = "/api/v1/status/virtual-keys";
@@ -12,7 +13,10 @@ const VIRTUAL_KEYS_URL = "/api/v1/status/virtual-keys";
 export const virtualKeysQueryKey = [VIRTUAL_KEYS_URL] as const;
 
 async function fetchVirtualKeys(signal?: AbortSignal): Promise<VirtualKeysResponse | null> {
-  const res = await fetch(VIRTUAL_KEYS_URL, { signal, headers: { Accept: "application/json" } });
+  const res = await fetch(VIRTUAL_KEYS_URL, {
+    signal,
+    headers: { Accept: "application/json", ...getAuthHeaders() },
+  });
   // 401 / 403 are expected when the dashboard is opened without an admin
   // session. Surface as "no data" rather than throwing so the panel can
   // render an empty state gracefully.

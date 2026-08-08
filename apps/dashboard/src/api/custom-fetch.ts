@@ -2,6 +2,8 @@
  * Custom fetch wrapper for Orval-generated API client.
  */
 
+import { getAuthHeaders } from "@/lib/api-key";
+
 export type ErrorType<T> = T;
 export type BodyType<T> = T;
 
@@ -15,6 +17,7 @@ export const customFetch = async <T>(
     ...rest,
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...customHeaders,
     },
     ...(data ? { body: JSON.stringify(data) } : {}),

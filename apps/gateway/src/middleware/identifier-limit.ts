@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { freellmError } from "../errors/index.js";
 import { getStores } from "../stores/create-stores.js";
 import type { IdentifierLimiterStore } from "../stores/identifier-limiter/types.js";
+import { isApiPath } from "./paths.js";
 
 /**
  * Per-identifier rate-limit middleware.
@@ -40,7 +41,7 @@ export async function identifierLimit(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (req.path === "/healthz" || req.path === "/api/healthz") {
+  if (!isApiPath(req.path)) {
     next();
     return;
   }

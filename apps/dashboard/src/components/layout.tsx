@@ -1,4 +1,5 @@
 import { getHealthCheckQueryKey, useHealthCheck } from "@/api/hooks";
+import { ApiKeyControl } from "@/components/api-key-control";
 import { cn } from "@/lib/utils";
 import { Activity, Box, Terminal } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -26,9 +27,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex flex-col min-h-[100dvh] w-full bg-background text-foreground font-sans selection:bg-primary/30 dark overflow-x-hidden">
       {/* ── Desktop top navigation bar ── */}
       <header className="hidden md:block border-b border-white/[0.06] bg-sidebar/80 backdrop-blur-md relative z-20 shrink-0">
-        <div className="max-w-7xl mx-auto px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-2.5">
+        <div className="max-w-7xl mx-auto px-8 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-8 min-w-0">
+            <div className="flex items-center gap-2.5 shrink-0">
               <FreeLLMLogo size={26} />
               <span className="font-mono font-bold tracking-tight text-sm leading-none">
                 FreeLLM
@@ -62,27 +63,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-xs font-mono">
-            <div className={cn("w-2 h-2 rounded-full shrink-0 transition-colors", gatewayDot)} />
-            <span className="text-muted-foreground">Gateway</span>
-            <span className="uppercase text-[10px] tracking-widest text-foreground/70">
-              {isLoading ? "..." : health?.status || "UNK"}
-            </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <ApiKeyControl />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-xs font-mono">
+              <div className={cn("w-2 h-2 rounded-full shrink-0 transition-colors", gatewayDot)} />
+              <span className="text-muted-foreground">Gateway</span>
+              <span className="uppercase text-[10px] tracking-widest text-foreground/70">
+                {isLoading ? "..." : health?.status || "UNK"}
+              </span>
+            </div>
           </div>
         </div>
       </header>
 
       {/* ── Mobile top bar (logo + status only, no hamburger) ── */}
-      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-sidebar/80 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
+      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-sidebar/80 backdrop-blur-md gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <FreeLLMLogo size={24} />
           <span className="font-mono font-bold tracking-tight text-sm">FreeLLM</span>
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04] text-xs font-mono">
-          <div className={cn("w-1.5 h-1.5 rounded-full", gatewayDot)} />
-          <span className="uppercase tracking-widest text-[10px] text-foreground/70">
-            {isLoading ? "..." : health?.status || "UNK"}
-          </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <ApiKeyControl compact />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04] text-xs font-mono">
+            <div className={cn("w-1.5 h-1.5 rounded-full", gatewayDot)} />
+            <span className="uppercase tracking-widest text-[10px] text-foreground/70">
+              {isLoading ? "..." : health?.status || "UNK"}
+            </span>
+          </div>
         </div>
       </header>
 

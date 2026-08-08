@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { freellmError } from "../errors/index.js";
 import { getStores } from "../stores/create-stores.js";
+import { isApiPath } from "./paths.js";
 
 const windowMs = Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? "60000", 10);
 const max = Number.parseInt(process.env.RATE_LIMIT_RPM ?? "60", 10);
@@ -48,9 +49,7 @@ function buildClientRateLimit() {
     standardHeaders: true,
     legacyHeaders: false,
     ...(store ? { store: store as never } : {}),
-    skip: (req) => {
-      return req.path === "/healthz" || req.path === "/api/healthz";
-    },
+    skip: (req) => !isApiPath(req.path),
     handler: (_req: Request, _res: Response, next: NextFunction) => {
       next(
         freellmError({
