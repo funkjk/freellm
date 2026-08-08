@@ -47,8 +47,12 @@ export class ProviderRegistry {
     return this.providers.filter((p) => p.isEnabled());
   }
 
-  getAvailable(): ProviderAdapter[] {
-    return this.providers.filter((p) => p.isAvailable());
+  async getAvailable(): Promise<ProviderAdapter[]> {
+    const out: ProviderAdapter[] = [];
+    for (const p of this.providers) {
+      if (await p.isAvailable()) out.push(p);
+    }
+    return out;
   }
 
   getById(id: string): ProviderAdapter | undefined {
@@ -59,17 +63,16 @@ export class ProviderRegistry {
     return this.providers.filter((p) => p.isEnabled()).flatMap((p) => p.models);
   }
 
-  getProviderForMetaModel(
+  async getProviderForMetaModel(
     metaModel: string,
     excluded: Set<string>,
     strategy: RoutingStrategy = "round_robin",
     rrIndex = 0,
     advanceRrIndex?: (next: number) => void,
-  ): ProviderAdapter | undefined {
-    const available = this.getAvailable().filter((p) => !excluded.has(p.id));
+  ): Promise<ProviderAdapter | undefined> {
+    const available = (await this.getAvailable()).filter((p) => !excluded.has(p.id));
     if (available.length === 0) return undefined;
 
-    // Build candidate list — priority order defines the round-robin sequence
     let candidates: ProviderAdapter[];
     if (metaModel === "free-fast") {
       candidates = [...FAST_PRIORITY]
@@ -80,7 +83,6 @@ export class ProviderRegistry {
         .map((id) => available.find((a) => a.id === id))
         .filter((p): p is ProviderAdapter => p !== undefined);
     } else {
-      // "free" — all available providers
       candidates = available;
     }
 
@@ -90,22 +92,24 @@ export class ProviderRegistry {
       return candidates[Math.floor(Math.random() * candidates.length)];
     }
 
-    // round_robin: pick from candidates using the caller-managed rotation index
     const idx = rrIndex % candidates.length;
     if (advanceRrIndex) advanceRrIndex(rrIndex + 1);
     return candidates[idx];
   }
 
-  getStatusAll(usageByProvider: Record<string, TokenUsageTotals> = {}): ProviderStatusInfo[] {
-    return this.providers.map((p) => {
+  async getStatusAll(
+    usageByProvider: Record<string, TokenUsageTotals> = {},
+  ): Promise<ProviderStatusInfo[]> {
+    const result: ProviderStatusInfo[] = [];
+    for (const p of this.providers) {
       const stats = p.getStats();
-      const keys = p.getKeysStatus();
+      const keys = await p.getKeysStatus();
       const privacyEntry = PROVIDER_PRIVACY[p.id];
-      return {
+      result.push({
         id: p.id,
         name: p.name,
         enabled: p.isEnabled(),
-        circuitBreakerState: p.getCircuitBreakerState(),
+        circuitBreakerState: await p.getCircuitBreakerState(),
         totalRequests: stats.totalRequests,
         successRequests: stats.successRequests,
         failedRequests: stats.failedRequests,
@@ -124,7 +128,8 @@ export class ProviderRegistry {
               lastVerified: privacyEntry.last_verified,
             }
           : undefined,
-      };
-    });
+      });
+    }
+    return result;
   }
 }

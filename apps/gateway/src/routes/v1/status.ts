@@ -23,24 +23,22 @@ function browserTokensInfo(): BrowserTokensInfo {
 
 const statusRouter: IRouter = Router();
 
-// Admin auth for mutation endpoints (reset, routing strategy changes)
-// and for the virtual-keys inventory (sensitive, operator-only).
 statusRouter.post("/providers/:providerId/reset", adminAuth);
 statusRouter.patch("/routing", adminAuth);
 statusRouter.get("/virtual-keys", adminAuth);
 
-statusRouter.get("/", (_req, res) => {
+statusRouter.get("/", async (_req, res) => {
   const stats = gatewayRouter.requestLog.getStats();
   const recentRequests = gatewayRouter.requestLog.getRecent(50);
-  const { byProvider, gateway } = gatewayRouter.usageTracker.getAllTotals();
-  const cacheStats = gatewayRouter.cache.getStats();
+  const { byProvider, gateway } = await gatewayRouter.usageTracker.getAllTotals();
+  const cacheStats = await gatewayRouter.cache.getStats();
 
   res.json({
     routingStrategy: gatewayRouter.strategy,
     totalRequests: stats.totalRequests,
     successRequests: stats.successRequests,
     failedRequests: stats.failedRequests,
-    providers: registry.getStatusAll(byProvider),
+    providers: await registry.getStatusAll(byProvider),
     recentRequests,
     usage: gateway,
     cache: cacheStats,
@@ -48,7 +46,7 @@ statusRouter.get("/", (_req, res) => {
   });
 });
 
-statusRouter.post("/providers/:providerId/reset", (req, res, next: NextFunction) => {
+statusRouter.post("/providers/:providerId/reset", async (req, res, next: NextFunction) => {
   const { providerId } = req.params;
   const provider = registry.getById(providerId);
 
@@ -62,16 +60,16 @@ statusRouter.post("/providers/:providerId/reset", (req, res, next: NextFunction)
     return;
   }
 
-  provider.resetCircuitBreaker();
+  await provider.resetCircuitBreaker();
   const stats = provider.getStats();
-  const keys = provider.getKeysStatus();
-  const usage = gatewayRouter.usageTracker.getTotals(provider.id);
+  const keys = await provider.getKeysStatus();
+  const usage = await gatewayRouter.usageTracker.getTotals(provider.id);
 
   res.json({
     id: provider.id,
     name: provider.name,
     enabled: provider.isEnabled(),
-    circuitBreakerState: provider.getCircuitBreakerState(),
+    circuitBreakerState: await provider.getCircuitBreakerState(),
     totalRequests: stats.totalRequests,
     successRequests: stats.successRequests,
     failedRequests: stats.failedRequests,
@@ -86,56 +84,54 @@ statusRouter.post("/providers/:providerId/reset", (req, res, next: NextFunction)
   });
 });
 
-/**
- * Operator inventory of loaded virtual sub-keys and their current usage.
- * The raw key token is replaced by a masked id so a screen-share from the
- * dashboard cannot leak bearer tokens. Caps and usage are live.
- */
-statusRouter.get("/virtual-keys", (_req, res) => {
+statusRouter.get("/virtual-keys", async (_req, res) => {
   const store = getVirtualKeyStore();
   const now = Date.now();
-  const keys = store.list().map((key) => {
-    const usage = store.usage(key.id, now);
-    const maskedId = key.id.length <= 12 ? key.id : `${key.id.slice(0, 12)}...${key.id.slice(-4)}`;
-    const expiresAtMs = key.expiresAt ? Date.parse(key.expiresAt) : null;
-    const expired = expiresAtMs != null && Number.isFinite(expiresAtMs) && now > expiresAtMs;
-    return {
-      maskedId,
-      label: key.label,
-      allowedModels: key.allowedModels ?? null,
-      expiresAt: key.expiresAt ?? null,
-      expired,
-      dailyRequestCap: key.dailyRequestCap ?? null,
-      dailyTokenCap: key.dailyTokenCap ?? null,
-      requestsInWindow: usage?.requestsInWindow ?? 0,
-      tokensInWindow: usage?.tokensInWindow ?? 0,
-      requestCapRemaining: usage?.requestCapRemaining ?? null,
-      tokenCapRemaining: usage?.tokenCapRemaining ?? null,
-    };
-  });
+  const keys = await Promise.all(
+    store.list().map(async (key) => {
+      const usage = await store.usage(key.id, now);
+      const maskedId =
+        key.id.length <= 12 ? key.id : `${key.id.slice(0, 12)}...${key.id.slice(-4)}`;
+      const expiresAtMs = key.expiresAt ? Date.parse(key.expiresAt) : null;
+      const expired = expiresAtMs != null && Number.isFinite(expiresAtMs) && now > expiresAtMs;
+      return {
+        maskedId,
+        label: key.label,
+        allowedModels: key.allowedModels ?? null,
+        expiresAt: key.expiresAt ?? null,
+        expired,
+        dailyRequestCap: key.dailyRequestCap ?? null,
+        dailyTokenCap: key.dailyTokenCap ?? null,
+        requestsInWindow: usage?.requestsInWindow ?? 0,
+        tokensInWindow: usage?.tokensInWindow ?? 0,
+        requestCapRemaining: usage?.requestCapRemaining ?? null,
+        tokenCapRemaining: usage?.tokenCapRemaining ?? null,
+      };
+    }),
+  );
   res.json({
     softCapWarning:
-      "Counters are in-memory, rolling 24h, and reset on process restart. Not a billing system.",
+      "Counters use the configured state backend (memory or Redis), rolling 24h. Not a billing system.",
     count: keys.length,
     keys,
   });
 });
 
-statusRouter.patch("/routing", validate(updateRoutingSchema), (req, res) => {
+statusRouter.patch("/routing", validate(updateRoutingSchema), async (req, res) => {
   const { strategy } = req.body as { strategy: RoutingStrategy };
 
   gatewayRouter.strategy = strategy;
   const stats = gatewayRouter.requestLog.getStats();
   const recentRequests = gatewayRouter.requestLog.getRecent(50);
-  const { byProvider, gateway } = gatewayRouter.usageTracker.getAllTotals();
-  const cacheStats = gatewayRouter.cache.getStats();
+  const { byProvider, gateway } = await gatewayRouter.usageTracker.getAllTotals();
+  const cacheStats = await gatewayRouter.cache.getStats();
 
   res.json({
     routingStrategy: gatewayRouter.strategy,
     totalRequests: stats.totalRequests,
     successRequests: stats.successRequests,
     failedRequests: stats.failedRequests,
-    providers: registry.getStatusAll(byProvider),
+    providers: await registry.getStatusAll(byProvider),
     recentRequests,
     usage: gateway,
     cache: cacheStats,

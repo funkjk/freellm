@@ -123,7 +123,7 @@ describe("GET /v1/status/virtual-keys", () => {
       .set("authorization", ADMIN_BEARER);
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(1);
-    expect(res.body.softCapWarning).toMatch(/reset on process restart/i);
+    expect(res.body.softCapWarning).toMatch(/configured state backend/i);
     expect(Array.isArray(res.body.keys)).toBe(true);
 
     const key = res.body.keys[0];

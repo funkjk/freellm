@@ -1,45 +1,45 @@
 import type { NextFunction, Request, Response } from "express";
 import { freellmError } from "../errors/index.js";
-import { IdentifierLimiter, parseIdentifierLimitEnv } from "../features/identifier-limiter.js";
+import { getStores } from "../stores/create-stores.js";
+import type { IdentifierLimiterStore } from "../stores/identifier-limiter/types.js";
 
 /**
  * Per-identifier rate-limit middleware.
  *
  * Reads the `X-FreeLLM-Identifier` header, sanitizes it, and buckets
  * each request against a sliding-window limiter keyed on the result.
- * Emits `X-FreeLLM-Identifier` (what we actually used), `-Remaining`,
- * and `-Reset` response headers so clients can see their own budget.
- *
- * Fallback rules:
- *   1. No header → use `ip:<client-ip>`
- *   2. Literal string "undefined" or "null" → treat as missing
- *   3. Fails the safe-char regex → reject with `invalid_request`
- *      (we never silently accept a tainted value into logs)
- *
- * The limiter is a module-level singleton so every request hits the
- * same Map.
  */
 
 const SAFE_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 const EXPLICITLY_NULL = new Set(["undefined", "null", ""]);
 
-const limiter = new IdentifierLimiter(
-  parseIdentifierLimitEnv(
-    process.env.FREELLM_IDENTIFIER_LIMIT,
-    Number.parseInt(process.env.FREELLM_IDENTIFIER_MAX_BUCKETS ?? "10000", 10),
-  ),
-);
+let limiter: IdentifierLimiterStore | null = null;
 
-export function resetIdentifierLimiter(): void {
-  limiter.reset();
+function getLimiter(): IdentifierLimiterStore {
+  if (!limiter) {
+    limiter = getStores().createIdentifierLimiter();
+  }
+  return limiter;
 }
 
-export function identifierLimiterSize(): number {
-  return limiter.size();
+export async function resetIdentifierLimiter(): Promise<void> {
+  await getLimiter().reset();
 }
 
-export function identifierLimit(req: Request, res: Response, next: NextFunction): void {
-  // Health checks bypass every quota.
+export async function identifierLimiterSize(): Promise<number> {
+  return getLimiter().size();
+}
+
+/** Test helper: replace limiter instance. */
+export function setIdentifierLimiter(next: IdentifierLimiterStore): void {
+  limiter = next;
+}
+
+export async function identifierLimit(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   if (req.path === "/healthz" || req.path === "/api/healthz") {
     next();
     return;
@@ -51,11 +51,9 @@ export function identifierLimit(req: Request, res: Response, next: NextFunction)
 
   let identifier: string;
   if (trimmed.length === 0 || EXPLICITLY_NULL.has(normalized)) {
-    // Missing or explicitly null: fall back to the real client IP.
     const ip = req.ip ?? "unknown";
     identifier = `ip:${ip}`;
   } else if (!SAFE_PATTERN.test(trimmed)) {
-    // Tainted value. Reject loudly rather than let it into logs.
     next(
       freellmError({
         code: "invalid_request",
@@ -67,9 +65,8 @@ export function identifierLimit(req: Request, res: Response, next: NextFunction)
     identifier = trimmed;
   }
 
-  const result = limiter.checkAndRecord(identifier);
+  const result = await getLimiter().checkAndRecord(identifier);
 
-  // Always surface the decision as headers so callers can self-throttle.
   res.setHeader("X-FreeLLM-Identifier", result.identifier);
   res.setHeader("X-FreeLLM-Identifier-Remaining", String(result.remaining));
   res.setHeader("X-FreeLLM-Identifier-Reset", String(result.resetAfterMs));

@@ -132,11 +132,11 @@ describe("streaming token tracking", () => {
 
   it("records actual token count against virtual key cap after streaming", async () => {
     const store = getVirtualKeyStore();
-    const before = store.usage(TEST_KEY_ID)?.tokensInWindow ?? 0;
+    const before = (await store.usage(TEST_KEY_ID))?.tokensInWindow ?? 0;
 
     await streamRequest(`Bearer ${TEST_KEY_ID}`);
 
-    const after = store.usage(TEST_KEY_ID)?.tokensInWindow ?? 0;
+    const after = (await store.usage(TEST_KEY_ID))?.tokensInWindow ?? 0;
     expect(after).toBeGreaterThan(before);
     // Fake upstream emits prompt_tokens=10 + completion_tokens=5.
     expect(after - before).toBe(15);

@@ -4,53 +4,55 @@ import { IdentifierLimiter, parseIdentifierLimitEnv } from "../src/features/iden
 const tightConfig = () => ({ max: 3, windowMs: 1_000, maxBuckets: 100 });
 
 describe("IdentifierLimiter.checkAndRecord", () => {
-  it("allows the first `max` requests and rejects the next", () => {
+  it("allows the first `max` requests and rejects the next", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
     const now = 1_000_000;
-    expect(limiter.checkAndRecord("u", now).allowed).toBe(true);
-    expect(limiter.checkAndRecord("u", now + 10).allowed).toBe(true);
-    expect(limiter.checkAndRecord("u", now + 20).allowed).toBe(true);
-    const fourth = limiter.checkAndRecord("u", now + 30);
+    expect((await limiter.checkAndRecord("u", now)).allowed).toBe(true);
+    expect((await limiter.checkAndRecord("u", now + 10)).allowed).toBe(true);
+    expect((await limiter.checkAndRecord("u", now + 20)).allowed).toBe(true);
+    const fourth = await limiter.checkAndRecord("u", now + 30);
     expect(fourth.allowed).toBe(false);
     expect(fourth.remaining).toBe(0);
   });
 
-  it("reports decreasing remaining count", () => {
+  it("reports decreasing remaining count", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
     const now = 100;
-    expect(limiter.checkAndRecord("u", now).remaining).toBe(2);
-    expect(limiter.checkAndRecord("u", now).remaining).toBe(1);
-    expect(limiter.checkAndRecord("u", now).remaining).toBe(0);
+    expect((await limiter.checkAndRecord("u", now)).remaining).toBe(2);
+    expect((await limiter.checkAndRecord("u", now)).remaining).toBe(1);
+    expect((await limiter.checkAndRecord("u", now)).remaining).toBe(0);
   });
 
-  it("different identifiers do not interfere", () => {
+  it("different identifiers do not interfere", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
     const now = 1_000_000;
-    for (let i = 0; i < 3; i++) expect(limiter.checkAndRecord("alice", now).allowed).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      expect((await limiter.checkAndRecord("alice", now)).allowed).toBe(true);
+    }
     // alice is exhausted
-    expect(limiter.checkAndRecord("alice", now + 50).allowed).toBe(false);
+    expect((await limiter.checkAndRecord("alice", now + 50)).allowed).toBe(false);
     // bob is untouched
-    expect(limiter.checkAndRecord("bob", now + 60).allowed).toBe(true);
+    expect((await limiter.checkAndRecord("bob", now + 60)).allowed).toBe(true);
   });
 
-  it("slides the window: old entries drop off and new requests succeed", () => {
+  it("slides the window: old entries drop off and new requests succeed", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
     const start = 1_000_000;
-    for (let i = 0; i < 3; i++) limiter.checkAndRecord("u", start + i);
-    expect(limiter.checkAndRecord("u", start + 500).allowed).toBe(false);
+    for (let i = 0; i < 3; i++) await limiter.checkAndRecord("u", start + i);
+    expect((await limiter.checkAndRecord("u", start + 500)).allowed).toBe(false);
     // Jump past the window — all earlier timestamps fall off.
     const afterWindow = start + 2_000;
-    const result = limiter.checkAndRecord("u", afterWindow);
+    const result = await limiter.checkAndRecord("u", afterWindow);
     expect(result.allowed).toBe(true);
   });
 
-  it("reports resetAfterMs equal to how long until the oldest slot expires", () => {
+  it("reports resetAfterMs equal to how long until the oldest slot expires", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
     const start = 1_000_000;
-    limiter.checkAndRecord("u", start);
-    limiter.checkAndRecord("u", start + 100);
-    limiter.checkAndRecord("u", start + 200);
-    const rejected = limiter.checkAndRecord("u", start + 300);
+    await limiter.checkAndRecord("u", start);
+    await limiter.checkAndRecord("u", start + 100);
+    await limiter.checkAndRecord("u", start + 200);
+    const rejected = await limiter.checkAndRecord("u", start + 300);
     // Oldest timestamp is `start`, window is 1000, so it frees at start+1000.
     // Now is start+300, so resetAfterMs should be 700.
     expect(rejected.allowed).toBe(false);
@@ -59,43 +61,43 @@ describe("IdentifierLimiter.checkAndRecord", () => {
 });
 
 describe("IdentifierLimiter LRU eviction", () => {
-  it("drops the stalest identifier when maxBuckets is exceeded", () => {
+  it("drops the stalest identifier when maxBuckets is exceeded", async () => {
     const limiter = new IdentifierLimiter({ max: 5, windowMs: 60_000, maxBuckets: 3 });
     const now = 1_000_000;
-    limiter.checkAndRecord("a", now);
-    limiter.checkAndRecord("b", now + 1);
-    limiter.checkAndRecord("c", now + 2);
-    expect(limiter.size()).toBe(3);
+    await limiter.checkAndRecord("a", now);
+    await limiter.checkAndRecord("b", now + 1);
+    await limiter.checkAndRecord("c", now + 2);
+    expect(await limiter.size()).toBe(3);
     // Adding a 4th identifier should evict the stalest (a).
-    limiter.checkAndRecord("d", now + 3);
-    expect(limiter.size()).toBe(3);
+    await limiter.checkAndRecord("d", now + 3);
+    expect(await limiter.size()).toBe(3);
     // If we check a now, it should be treated as a fresh bucket.
-    const a = limiter.checkAndRecord("a", now + 4);
+    const a = await limiter.checkAndRecord("a", now + 4);
     expect(a.allowed).toBe(true);
     expect(a.remaining).toBe(4);
   });
 });
 
 describe("IdentifierLimiter TTL eviction", () => {
-  it("drops idle buckets after 2x the window", () => {
+  it("drops idle buckets after 2x the window", async () => {
     const limiter = new IdentifierLimiter({ max: 5, windowMs: 1_000, maxBuckets: 100 });
     const now = 1_000_000;
-    limiter.checkAndRecord("ghost", now);
-    expect(limiter.size()).toBe(1);
+    await limiter.checkAndRecord("ghost", now);
+    expect(await limiter.size()).toBe(1);
     // Subsequent checks with wildly later timestamps prune idle buckets.
-    limiter.checkAndRecord("new", now + 10_000);
-    expect(limiter.size()).toBe(1); // only "new" survived
+    await limiter.checkAndRecord("new", now + 10_000);
+    expect(await limiter.size()).toBe(1); // only "new" survived
   });
 });
 
 describe("IdentifierLimiter.reset", () => {
-  it("clears every bucket", () => {
+  it("clears every bucket", async () => {
     const limiter = new IdentifierLimiter(tightConfig());
-    limiter.checkAndRecord("a");
-    limiter.checkAndRecord("b");
-    expect(limiter.size()).toBe(2);
-    limiter.reset();
-    expect(limiter.size()).toBe(0);
+    await limiter.checkAndRecord("a");
+    await limiter.checkAndRecord("b");
+    expect(await limiter.size()).toBe(2);
+    await limiter.reset();
+    expect(await limiter.size()).toBe(0);
   });
 });
 

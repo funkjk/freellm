@@ -14,6 +14,19 @@ The fastest path. Click a button, sign in, paste your provider API keys, done.
 
 Your gateway is live in under 2 minutes. No clone, no Docker, no terminal.
 
+### Vercel (serverless, opt-in Redis)
+
+The gateway can also run as a Vercel Node function (`apps/gateway`). Set the Vercel project root to `apps/gateway`, then configure:
+
+```bash
+FREELLM_STATE_BACKEND=redis
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+# plus at least one provider key
+```
+
+Without Redis, each serverless isolate has its own memory — rate limits and caps will not be shared. Long SSE streams may be cut by Vercel `maxDuration` (heartbeats stay enabled; truncated streams are not resumed).
+
 ## Option B: Docker
 
 Pull the prebuilt multi-arch image from GHCR (no clone needed):

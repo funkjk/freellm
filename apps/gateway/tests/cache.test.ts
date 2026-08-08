@@ -83,92 +83,95 @@ describe("ResponseCache.isCacheable", () => {
 });
 
 describe("ResponseCache.set skips uncacheable responses", () => {
-  it("does not store a finish_reason=length response", () => {
+  it("does not store a finish_reason=length response", async () => {
     const cache = new ResponseCache();
     const req = requestWith();
-    cache.set(req, responseWith("length"), "groq", 10, 10);
-    expect(cache.get(req)).toBeUndefined();
-    expect(cache.getStats().sets).toBe(0);
+    await cache.set(req, responseWith("length"), "groq", 10, 10);
+    expect(await cache.get(req)).toBeUndefined();
+    expect((await cache.getStats()).sets).toBe(0);
   });
 
-  it("does store a finish_reason=stop response", () => {
+  it("does store a finish_reason=stop response", async () => {
     const cache = new ResponseCache();
     const req = requestWith();
-    cache.set(req, responseWith("stop"), "groq", 10, 10);
-    const hit = cache.get(req);
+    await cache.set(req, responseWith("stop"), "groq", 10, 10);
+    const hit = await cache.get(req);
     expect(hit).toBeDefined();
     expect(hit?.provider).toBe("groq");
-    expect(cache.getStats().sets).toBe(1);
+    expect((await cache.getStats()).sets).toBe(1);
   });
 });
 
 describe("ResponseCache key discrimination", () => {
   // Helper: store a marker response under `req`, then see if looking up
   // `other` returns the same one. A hit means the keys collided.
-  function keysCollide(req: ChatCompletionRequest, other: ChatCompletionRequest): boolean {
+  async function keysCollide(
+    req: ChatCompletionRequest,
+    other: ChatCompletionRequest,
+  ): Promise<boolean> {
     const cache = new ResponseCache();
-    cache.set(req, responseWith("stop", "A"), "groq", 1, 1);
-    const hit = cache.get(other);
+    await cache.set(req, responseWith("stop", "A"), "groq", 1, 1);
+    const hit = await cache.get(other);
     return hit !== undefined;
   }
 
-  it("identical requests share a cache entry", () => {
+  it("identical requests share a cache entry", async () => {
     const a = requestWith({ temperature: 0.5 });
     const b = requestWith({ temperature: 0.5 });
-    expect(keysCollide(a, b)).toBe(true);
+    expect(await keysCollide(a, b)).toBe(true);
   });
 
-  it("different tools arrays produce different keys", () => {
+  it("different tools arrays produce different keys", async () => {
     const a = requestWith({
       tools: [{ type: "function", function: { name: "get_weather" } }],
     });
     const b = requestWith({
       tools: [{ type: "function", function: { name: "get_time" } }],
     });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("a request with tools does not collide with one without", () => {
+  it("a request with tools does not collide with one without", async () => {
     const a = requestWith({
       tools: [{ type: "function", function: { name: "get_weather" } }],
     });
     const b = requestWith();
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different tool_choice values produce different keys", () => {
+  it("different tool_choice values produce different keys", async () => {
     const a = requestWith({ tool_choice: "auto" });
     const b = requestWith({ tool_choice: "required" });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different response_format values produce different keys", () => {
+  it("different response_format values produce different keys", async () => {
     const a = requestWith({ response_format: { type: "text" } });
     const b = requestWith({ response_format: { type: "json_object" } });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different reasoning_effort values produce different keys", () => {
+  it("different reasoning_effort values produce different keys", async () => {
     const a = requestWith({ reasoning_effort: "low" });
     const b = requestWith({ reasoning_effort: "high" });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different max_completion_tokens values produce different keys", () => {
+  it("different max_completion_tokens values produce different keys", async () => {
     const a = requestWith({ max_completion_tokens: 100 });
     const b = requestWith({ max_completion_tokens: 1000 });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different seed values produce different keys", () => {
+  it("different seed values produce different keys", async () => {
     const a = requestWith({ seed: 42 });
     const b = requestWith({ seed: 100 });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 
-  it("different presence/frequency penalty values produce different keys", () => {
+  it("different presence/frequency penalty values produce different keys", async () => {
     const a = requestWith({ presence_penalty: 0.5 });
     const b = requestWith({ presence_penalty: 1.5 });
-    expect(keysCollide(a, b)).toBe(false);
+    expect(await keysCollide(a, b)).toBe(false);
   });
 });

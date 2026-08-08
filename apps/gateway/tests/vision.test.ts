@@ -74,16 +74,16 @@ class StubProvider implements ProviderAdapter {
   isEnabled() {
     return true;
   }
-  isAvailable() {
+  async isAvailable(): Promise<boolean> {
     return true;
   }
   getStats(): ProviderStats {
     return { totalRequests: 0, successRequests: 0, failedRequests: 0, rateLimitedRequests: 0 };
   }
-  getCircuitBreakerState(): CircuitBreakerState {
+  async getCircuitBreakerState(): Promise<CircuitBreakerState> {
     return this.cbState;
   }
-  getKeysStatus(): KeyStatus[] {
+  async getKeysStatus(): Promise<KeyStatus[]> {
     return [
       { index: 0, rateLimited: false, requestsInWindow: 0, maxRequests: 30, retryAfterMs: null },
     ];
@@ -95,14 +95,14 @@ class StubProvider implements ProviderAdapter {
       headers: { "content-type": "application/json" },
     });
   }
-  onSuccess() {
+  async onSuccess(): Promise<void> {
     this.cbState = "closed";
   }
-  onRateLimit() {}
-  onError() {
+  async onRateLimit(): Promise<void> {}
+  async onError(): Promise<void> {
     this.cbState = "open";
   }
-  resetCircuitBreaker() {
+  async resetCircuitBreaker(): Promise<void> {
     this.cbState = "closed";
   }
 }
@@ -111,29 +111,45 @@ function makeRegistry(providers: StubProvider[]): ProviderRegistry {
   return {
     getAll: () => providers,
     getEnabled: () => providers,
-    getAvailable: () => providers.filter((p) => p.isAvailable()),
+    getAvailable: async () => {
+      const out: StubProvider[] = [];
+      for (const p of providers) {
+        if (await p.isAvailable()) out.push(p);
+      }
+      return out;
+    },
     getById: (id: string) => providers.find((p) => p.id === id),
     getAllModels: () => providers.flatMap((p) => p.models),
-    getProviderForMetaModel: (_meta: string, excluded: Set<string>): ProviderAdapter | undefined =>
-      providers.find((p) => p.isAvailable() && !excluded.has(p.id)),
-    getStatusAll: (): ProviderStatusInfo[] =>
-      providers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        enabled: true,
-        circuitBreakerState: p.getCircuitBreakerState(),
-        totalRequests: 0,
-        successRequests: 0,
-        failedRequests: 0,
-        rateLimitedRequests: 0,
-        lastError: null,
-        lastUsedAt: null,
-        models: p.models.map((m) => m.id),
-        keyCount: 1,
-        keysAvailable: 1,
-        keys: p.getKeysStatus(),
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 },
-      })),
+    getProviderForMetaModel: async (
+      _meta: string,
+      excluded: Set<string>,
+    ): Promise<ProviderAdapter | undefined> => {
+      for (const p of providers) {
+        if (excluded.has(p.id)) continue;
+        if (await p.isAvailable()) return p;
+      }
+      return undefined;
+    },
+    getStatusAll: async (): Promise<ProviderStatusInfo[]> =>
+      Promise.all(
+        providers.map(async (p) => ({
+          id: p.id,
+          name: p.name,
+          enabled: true,
+          circuitBreakerState: await p.getCircuitBreakerState(),
+          totalRequests: 0,
+          successRequests: 0,
+          failedRequests: 0,
+          rateLimitedRequests: 0,
+          lastError: null,
+          lastUsedAt: null,
+          models: p.models.map((m) => m.id),
+          keyCount: 1,
+          keysAvailable: 1,
+          keys: await p.getKeysStatus(),
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 },
+        })),
+      ),
   } as unknown as ProviderRegistry;
 }
 
@@ -192,27 +208,27 @@ describe("hasImageContent", () => {
 // ─── 2. ResponseCache skips vision ───────────────────────────────────────────
 
 describe("ResponseCache — vision bypass", () => {
-  it("get() returns undefined for a request with image content", () => {
+  it("get() returns undefined for a request with image content", async () => {
     const cache = new ResponseCache();
     // Manually prime the cache with a text version of the same model
     const textReq = textRequest("free-fast");
-    cache.set(textReq, okResponse("free-fast") as never, "groq", 10, 5);
+    await cache.set(textReq, okResponse("free-fast") as never, "groq", 10, 5);
     // Vision request must NOT hit the cache even if key overlapped
-    expect(cache.get(visionRequest("free-fast"))).toBeUndefined();
+    expect(await cache.get(visionRequest("free-fast"))).toBeUndefined();
   });
 
-  it("set() does not store a vision request's response", () => {
+  it("set() does not store a vision request's response", async () => {
     const cache = new ResponseCache();
-    cache.set(visionRequest(), okResponse("free") as never, "gemini", 10, 5);
+    await cache.set(visionRequest(), okResponse("free") as never, "gemini", 10, 5);
     // A subsequent identical vision request must still miss
-    expect(cache.get(visionRequest())).toBeUndefined();
+    expect(await cache.get(visionRequest())).toBeUndefined();
   });
 
-  it("normal text requests are still cached", () => {
+  it("normal text requests are still cached", async () => {
     const cache = new ResponseCache();
     const req = textRequest("free-fast");
-    cache.set(req, okResponse("groq/llama") as never, "groq", 10, 5);
-    expect(cache.get(req)).toBeDefined();
+    await cache.set(req, okResponse("groq/llama") as never, "groq", 10, 5);
+    expect(await cache.get(req)).toBeDefined();
   });
 });
 
@@ -285,15 +301,20 @@ describe("GatewayRouter — meta-model vision routing", () => {
     const registry: ProviderRegistry = {
       getAll: () => [cerebras, gemini],
       getEnabled: () => [cerebras, gemini],
-      getAvailable: () => [cerebras, gemini],
+      getAvailable: async () => [cerebras, gemini],
       getById: () => undefined,
       getAllModels: () => [textOnlyModel, visionModel],
-      getProviderForMetaModel: (
+      getProviderForMetaModel: async (
         _meta: string,
         excluded: Set<string>,
-      ): ProviderAdapter | undefined =>
-        [cerebras, gemini].find((p) => p.isAvailable() && !excluded.has(p.id)),
-      getStatusAll: () => [],
+      ): Promise<ProviderAdapter | undefined> => {
+        for (const p of [cerebras, gemini]) {
+          if (excluded.has(p.id)) continue;
+          if (await p.isAvailable()) return p;
+        }
+        return undefined;
+      },
+      getStatusAll: async () => [],
     } as unknown as ProviderRegistry;
 
     const router = new GatewayRouter(registry);

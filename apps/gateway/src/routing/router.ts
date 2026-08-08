@@ -50,13 +50,13 @@ export class GatewayRouter {
     this.cache = obs.cache;
   }
 
-  private pickProvider(
+  private async pickProvider(
     modelId: string,
     excluded: Set<string>,
     privacy: PrivacyRequest = "any",
     requiresTools = false,
     requiresVision = false,
-  ): ProviderAdapter | undefined {
+  ): Promise<ProviderAdapter | undefined> {
     // Merge privacy exclusions into the caller-supplied exclude set so the
     // registry never sees providers the privacy posture forbids.
     const effectiveExcluded = new Set(excluded);
@@ -98,9 +98,9 @@ export class GatewayRouter {
       );
     }
 
-    const available = this.registry
-      .getAvailable()
-      .filter((p) => !effectiveExcluded.has(p.id) && p.models.some((m) => m.id === modelId));
+    const available = (await this.registry.getAvailable()).filter(
+      (p) => !effectiveExcluded.has(p.id) && p.models.some((m) => m.id === modelId),
+    );
 
     if (available.length === 0) return undefined;
 
@@ -209,7 +209,7 @@ export class GatewayRouter {
         );
       }
 
-      const provider = this.pickProvider(
+      const provider = await this.pickProvider(
         request.model,
         excluded,
         privacy,
@@ -236,13 +236,13 @@ export class GatewayRouter {
           const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
           // onRateLimit takes seconds (the provider API contract). Pass the
           // clamped value so absurd upstream hints can't lock a key out.
-          provider.onRateLimit(
+          await provider.onRateLimit(
             response,
             retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : undefined,
           );
           // Only exclude the provider if ALL its keys are now rate-limited.
           // Otherwise the next iteration can pick a different key from the same provider.
-          if (!provider.isAvailable()) {
+          if (!(await provider.isAvailable())) {
             excluded.add(provider.id);
           }
           // Strict mode never falls back to a different provider.
@@ -262,9 +262,9 @@ export class GatewayRouter {
           // hint for the key so we don't immediately retry into the same hole.
           const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
           if (retryAfterMs != null) {
-            provider.onRateLimit(response, Math.ceil(retryAfterMs / 1000));
+            await provider.onRateLimit(response, Math.ceil(retryAfterMs / 1000));
           }
-          provider.onError();
+          await provider.onError();
           excluded.add(provider.id);
           if (strict) {
             throw new ProviderClientError(provider.id, response.status, response);
@@ -274,7 +274,7 @@ export class GatewayRouter {
         }
 
         if (!response.ok) {
-          provider.onError();
+          await provider.onError();
           excluded.add(provider.id);
           if (strict) {
             throw new ProviderClientError(provider.id, response.status, response);
@@ -283,11 +283,11 @@ export class GatewayRouter {
           continue;
         }
 
-        provider.onSuccess(response);
+        await provider.onSuccess(response);
         return { response, provider, resolvedModel, attempted, failoverCount };
       } catch (err) {
         if (err instanceof ProviderClientError) throw err;
-        provider.onError();
+        await provider.onError();
         excluded.add(provider.id);
         if (strict) throw err;
         failoverCount++;
@@ -308,7 +308,7 @@ export class GatewayRouter {
     // Strict mode and vision requests both bypass the cache: strict because
     // a cached response may have come from a different provider; vision because
     // image payloads are large, near-zero repeat rate, and the cache self-guards.
-    const cached = strict || requiresVision ? null : this.cache.get(request);
+    const cached = strict || requiresVision ? null : await this.cache.get(request);
     if (cached) {
       const latencyMs = Date.now() - startTime;
       const data: ChatCompletionResponse = {
@@ -355,7 +355,7 @@ export class GatewayRouter {
       const promptTokens = data.usage?.prompt_tokens ?? 0;
       const completionTokens = data.usage?.completion_tokens ?? 0;
       if (promptTokens > 0 || completionTokens > 0) {
-        this.usageTracker.record(provider.id, promptTokens, completionTokens);
+        await this.usageTracker.record(provider.id, promptTokens, completionTokens);
       }
 
       // Surface finish_reason for observability. "length" means the
@@ -391,7 +391,7 @@ export class GatewayRouter {
 
       // Store in cache for future identical requests.
       // The cache class skips streaming and disabled state internally.
-      this.cache.set(request, data, provider.id, promptTokens, completionTokens);
+      await this.cache.set(request, data, provider.id, promptTokens, completionTokens);
 
       const meta: RouteMeta = {
         provider: provider.id,

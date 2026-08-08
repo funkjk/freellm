@@ -1,4 +1,11 @@
+/**
+ * In-memory LRU response cache for OpenAI-compatible chat completions.
+ * Persistence is delegated to a CacheBackend (memory or Redis).
+ */
+
 import { createHash } from "node:crypto";
+import type { CacheBackend, CacheEntry } from "../stores/cache/types.js";
+import { MemoryCacheBackend } from "../stores/cache/memory.js";
 import type { ChatCompletionRequest, ChatCompletionResponse } from "../types.js";
 
 export function hasImageContent(request: ChatCompletionRequest): boolean {
@@ -14,34 +21,6 @@ export function hasImageContent(request: ChatCompletionRequest): boolean {
   );
 }
 
-/**
- * In-memory LRU cache for OpenAI-compatible chat completions.
- *
- * Design:
- * - Exact-match keying via sha256 of every field that can change the
- *   response shape (model, messages, sampling params, tools,
- *   tool_choice, response_format, reasoning_effort, seed, and so on).
- *   Missing fields from the key used to cause cross-shape collisions
- *   where a JSON-mode response could satisfy a plain-text request.
- * - LRU eviction: re-insert on read keeps recently-used entries at the
- *   end of the Map.
- * - TTL expiry per entry (Date.now() + ttlMs).
- * - Streaming responses are never cached (the protocol is incompatible).
- * - Errors are never cached.
- * - Truncated responses (finish_reason === "length") are never cached.
- *   A single unlucky truncation should not poison every identical
- *   request for a full hour. The caller is expected to raise
- *   max_tokens or adjust reasoning_effort and try again.
- *
- * The whole thing lives in process memory because the rest of FreeLLM's
- * observability state (request log, rate limiter, circuit breaker, usage
- * tracker) is also in-memory. Restart resets everything together,
- * consistent.
- *
- * Memory math: ~5-50KB per cached response * 1000 entries = ~5-50MB max.
- * Configurable via CACHE_MAX_ENTRIES if needed.
- */
-
 export interface CacheStats {
   enabled: boolean;
   ttlMs: number;
@@ -54,24 +33,8 @@ export interface CacheStats {
   hitRate: number;
 }
 
-interface CacheEntry {
-  /** The cached response (deep-cloned at set/get to avoid mutation bugs). */
-  response: ChatCompletionResponse;
-  /** Provider that originally produced this response. */
-  provider: string;
-  /** When this entry expires (Date.now() ms). */
-  expiresAt: number;
-  /** When this entry was first written. */
-  createdAt: number;
-  /** How many times this entry has been served from cache. */
-  hitCount: number;
-  /** Token usage from the original response (not double-counted on hits). */
-  promptTokens: number;
-  completionTokens: number;
-}
-
 export class ResponseCache {
-  private store = new Map<string, CacheEntry>();
+  private backend: CacheBackend;
   private readonly maxEntries: number;
   private readonly ttlMs: number;
   private readonly enabled: boolean;
@@ -81,12 +44,10 @@ export class ResponseCache {
   private sets = 0;
   private evictions = 0;
 
-  constructor() {
-    // CACHE_ENABLED: defaults to "true". Set to "false" to disable.
+  constructor(backend?: CacheBackend) {
+    this.backend = backend ?? new MemoryCacheBackend();
     this.enabled = (process.env.CACHE_ENABLED ?? "true").toLowerCase() !== "false";
-    // CACHE_TTL_MS: defaults to 1 hour.
     this.ttlMs = Number.parseInt(process.env.CACHE_TTL_MS ?? "3600000", 10);
-    // CACHE_MAX_ENTRIES: defaults to 1000.
     this.maxEntries = Number.parseInt(process.env.CACHE_MAX_ENTRIES ?? "1000", 10);
   }
 
@@ -94,14 +55,6 @@ export class ResponseCache {
     return this.enabled;
   }
 
-  /**
-   * Build a cache key from every parameter that can change the response
-   * shape. Order-stable JSON keeps the hash deterministic across calls
-   * (Node's JSON.stringify preserves string-key insertion order).
-   *
-   * Adding a new optional field to chatCompletionRequestSchema? Add it
-   * here too, or different request shapes will collide on the same key.
-   */
   private buildKey(request: ChatCompletionRequest): string {
     const normalized = JSON.stringify({
       model: request.model,
@@ -123,28 +76,22 @@ export class ResponseCache {
     return createHash("sha256").update(normalized).digest("hex");
   }
 
-  /**
-   * Look up a cached response. Returns undefined on miss/expired/disabled/streaming.
-   * Successful hits are re-inserted to bump them to the end of the LRU order.
-   */
-  get(request: ChatCompletionRequest):
+  async get(request: ChatCompletionRequest): Promise<
     | {
         response: ChatCompletionResponse;
         provider: string;
         promptTokens: number;
         completionTokens: number;
       }
-    | undefined {
+    | undefined
+  > {
     if (!this.enabled) return undefined;
     if (request.stream) return undefined;
     if (hasImageContent(request)) return undefined;
-    // json_schema responses are never served from cache because the caller
-    // may want to re-validate against a different schema or receive fresh
-    // content for annotation (schema-validation warnings depend on content).
     if (request.response_format?.type === "json_schema") return undefined;
 
     const key = this.buildKey(request);
-    const entry = this.store.get(key);
+    const entry = await this.backend.get(key);
 
     if (!entry) {
       this.misses++;
@@ -152,16 +99,18 @@ export class ResponseCache {
     }
 
     if (Date.now() > entry.expiresAt) {
-      this.store.delete(key);
+      await this.backend.delete(key);
       this.misses++;
       return undefined;
     }
 
-    // LRU bump: re-insert to mark as recently used.
-    this.store.delete(key);
-    this.store.set(key, entry);
-
     entry.hitCount++;
+    if (this.backend.touch) {
+      await this.backend.touch(key, entry);
+    } else {
+      await this.backend.set(key, entry, Math.max(1, entry.expiresAt - Date.now()));
+    }
+
     this.hits++;
 
     return {
@@ -172,37 +121,27 @@ export class ResponseCache {
     };
   }
 
-  /**
-   * Store a successful response. Skips streaming, disabled cache, and
-   * length-truncated responses. Evicts the oldest entry if at capacity (LRU).
-   */
-  set(
+  async set(
     request: ChatCompletionRequest,
     response: ChatCompletionResponse,
     provider: string,
     promptTokens: number,
     completionTokens: number,
-  ): void {
+  ): Promise<void> {
     if (!this.enabled) return;
     if (request.stream) return;
     if (hasImageContent(request)) return;
-    // json_schema responses are never cached — schema-validation annotations
-    // depend on fresh content and the schema may differ across callers.
     if (request.response_format?.type === "json_schema") return;
     if (!ResponseCache.isCacheable(response)) return;
 
     const key = this.buildKey(request);
-
-    // LRU eviction if over capacity AND this is a new key
-    if (!this.store.has(key) && this.store.size >= this.maxEntries) {
-      const oldest = this.store.keys().next().value;
-      if (oldest !== undefined) {
-        this.store.delete(oldest);
-        this.evictions++;
-      }
+    const size = await this.backend.size();
+    const existing = await this.backend.get(key);
+    if (!existing && size >= this.maxEntries) {
+      this.evictions++;
     }
 
-    this.store.set(key, {
+    const entry: CacheEntry = {
       response,
       provider,
       promptTokens,
@@ -210,26 +149,15 @@ export class ResponseCache {
       expiresAt: Date.now() + this.ttlMs,
       createdAt: Date.now(),
       hitCount: 0,
-    });
+    };
+    await this.backend.set(key, entry, this.ttlMs);
     this.sets++;
   }
 
-  /** Clear all cached entries (admin reset). */
-  clear(): void {
-    this.store.clear();
+  async clear(): Promise<void> {
+    await this.backend.clear();
   }
 
-  /**
-   * Should this response land in the cache at all? Returns false for
-   * truncated responses (`finish_reason === "length"` on any choice),
-   * which otherwise would pin a bad answer for the whole TTL window.
-   * The caller is expected to raise max_tokens or reasoning_effort and
-   * retry rather than reuse the incomplete output.
-   *
-   * Errors, streaming, and empty responses are filtered by `set()` via
-   * the existing early-return paths so this helper only has to guard
-   * the length-truncation case.
-   */
   static isCacheable(response: ChatCompletionResponse): boolean {
     if (!response.choices || response.choices.length === 0) return false;
     for (const choice of response.choices) {
@@ -238,14 +166,13 @@ export class ResponseCache {
     return true;
   }
 
-  /** Snapshot of cache statistics for /v1/status and the dashboard. */
-  getStats(): CacheStats {
+  async getStats(): Promise<CacheStats> {
     const total = this.hits + this.misses;
     return {
       enabled: this.enabled,
       ttlMs: this.ttlMs,
       maxEntries: this.maxEntries,
-      currentSize: this.store.size,
+      currentSize: await this.backend.size(),
       hits: this.hits,
       misses: this.misses,
       sets: this.sets,

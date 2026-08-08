@@ -17,13 +17,13 @@ export interface ProviderAdapter {
 
   isEnabled(): boolean;
   getStats(): ProviderStats;
-  getCircuitBreakerState(): CircuitBreakerState;
-  isAvailable(): boolean;
-  getKeysStatus(): KeyStatus[];
+  getCircuitBreakerState(): Promise<CircuitBreakerState>;
+  isAvailable(): Promise<boolean>;
+  getKeysStatus(): Promise<KeyStatus[]>;
 
   complete(request: ChatCompletionRequest): Promise<Response>;
-  onSuccess(response: Response): void;
-  onRateLimit(response: Response, retryAfterSeconds?: number): void;
-  onError(): void;
-  resetCircuitBreaker(): void;
+  onSuccess(response: Response): Promise<void>;
+  onRateLimit(response: Response, retryAfterSeconds?: number): Promise<void>;
+  onError(): Promise<void>;
+  resetCircuitBreaker(): Promise<void>;
 }

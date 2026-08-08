@@ -66,11 +66,11 @@ function virtualKeyCheckToFreeLLMError(err: VirtualKeyCheckError) {
  * exhausted its rolling-window cap. Returns the key on success so the
  * caller can record usage after the upstream responds.
  */
-function guardVirtualKey(req: Request, model: string): VirtualKey | undefined {
+async function guardVirtualKey(req: Request, model: string): Promise<VirtualKey | undefined> {
   const key = req.virtualKey;
   if (!key) return undefined;
   try {
-    getVirtualKeyStore().assertCanServe(key, model);
+    await getVirtualKeyStore().assertCanServe(key, model);
   } catch (err) {
     if (err instanceof VirtualKeyCheckError) {
       throw virtualKeyCheckToFreeLLMError(err);
@@ -91,7 +91,7 @@ chatRouter.post(
     // Virtual key guard runs before routing. Errors here never touch upstream.
     let virtualKey: VirtualKey | undefined;
     try {
-      virtualKey = guardVirtualKey(req, body.model);
+      virtualKey = await guardVirtualKey(req, body.model);
     } catch (err) {
       return next(err);
     }
@@ -128,7 +128,7 @@ async function handleNonStreamingRequest(
     // response so failed routes never eat quota.
     if (virtualKey) {
       const tokens = (data.usage?.prompt_tokens ?? 0) + (data.usage?.completion_tokens ?? 0);
-      getVirtualKeyStore().recordRequest(virtualKey, tokens);
+      await getVirtualKeyStore().recordRequest(virtualKey, tokens);
     }
 
     // Warn callers about JSON-mode issues (truncation, schema validation).
@@ -187,7 +187,7 @@ async function handleStreamingRequest(
       // request itself against the virtual key cap but pass tokens=0; the
       // rolling-window request cap is the protective control here.
       if (virtualKey) {
-        getVirtualKeyStore().recordRequest(virtualKey, 0);
+        await getVirtualKeyStore().recordRequest(virtualKey, 0);
       }
       res.write("data: [DONE]\n\n");
       res.end();
@@ -246,13 +246,13 @@ async function handleStreamingRequest(
         const streamTokens = streamUsage
           ? (streamUsage.prompt_tokens ?? 0) + (streamUsage.completion_tokens ?? 0)
           : 0;
-        getVirtualKeyStore().recordRequest(virtualKey, streamTokens);
+        await getVirtualKeyStore().recordRequest(virtualKey, streamTokens);
       }
       // Update dashboard token counter when the upstream returned usage.
       if (streamUsage && provider.supportsStreamUsage) {
         const pt = streamUsage.prompt_tokens ?? 0;
         const ct = streamUsage.completion_tokens ?? 0;
-        if (pt + ct > 0) gatewayRouter.usageTracker.record(provider.id, pt, ct);
+        if (pt + ct > 0) await gatewayRouter.usageTracker.record(provider.id, pt, ct);
       }
     } catch (streamErr) {
       // Stream read failed after headers were sent

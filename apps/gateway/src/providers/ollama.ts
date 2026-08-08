@@ -44,14 +44,15 @@ export class OllamaProvider extends BaseProvider {
 
   /** Ollama overrides complete() to skip the Authorization header. */
   async complete(request: ChatCompletionRequest): Promise<Response> {
-    const picked = this.pickKey();
+    this.ensureBound();
+    const picked = await this.pickKey();
     if (!picked) {
       throw new Error(`Provider ${this.name} is not configured`);
     }
 
     this.stats.totalRequests++;
     this.stats.lastUsedAt = new Date().toISOString();
-    this.rateLimiter.recordRequest(picked.trackingId);
+    await this.rateLimiter.recordRequest(picked.trackingId);
 
     const mapped = this.mapRequest(request);
 

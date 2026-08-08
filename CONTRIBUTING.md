@@ -183,7 +183,7 @@ cd apps/gateway && pnpm build
 
 ### Key Architecture Rules
 
-1. **In-memory by default.** Every observability piece (request log, rate limiter, circuit breaker, usage tracker, cache) is in-memory. Don't add database-backed storage unless there's a specific reason.
+1. **In-memory by default.** Rate limiter, circuit breaker, usage tracker, cache, and virtual-key counters use the Store interfaces under `apps/gateway/src/stores/` with `FREELLM_STATE_BACKEND=memory` (default). Redis (Upstash) is opt-in for multi-instance / Vercel. Request log stays process-local. Don't add new persistence without an opt-in backend path.
 2. **No native modules.** Anything that needs `node-gyp` will break Railway's slim image build.
 3. **Provider isolation.** Provider failures must be contained by the circuit breaker. One bad provider should never bring down the gateway.
 4. **Concurrency safety.** When attributing a response to a key (multi-key rotation) or to a provider (failover), use the WeakMap pattern in `BaseProvider` to avoid race conditions between concurrent requests.

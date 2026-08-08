@@ -1,5 +1,6 @@
-import { CircuitBreaker } from "../routing/circuit-breaker.js";
-import { RateLimiter } from "../routing/rate-limiter.js";
+import { getStores } from "../stores/create-stores.js";
+import type { CircuitBreakerStore } from "../stores/circuit-breaker/types.js";
+import type { RateLimiterStore } from "../stores/rate-limiter/types.js";
 import type {
   ChatCompletionRequest,
   CircuitBreakerState,
@@ -26,8 +27,10 @@ export abstract class BaseProvider implements ProviderAdapter {
   readonly supportsStreamUsage: boolean = false;
   readonly supportsTools: boolean = true;
 
-  protected circuitBreaker = new CircuitBreaker();
-  protected rateLimiter = new RateLimiter();
+  protected circuitBreaker!: CircuitBreakerStore;
+  protected rateLimiter!: RateLimiterStore;
+  private storesBound = false;
+
   protected stats: ProviderStats = {
     totalRequests: 0,
     successRequests: 0,
@@ -35,20 +38,20 @@ export abstract class BaseProvider implements ProviderAdapter {
     rateLimitedRequests: 0,
   };
 
-  /** Next key to try when rotating. Synchronously advanced on each pick. */
   private keyRotationIndex = 0;
-
-  /**
-   * Maps each outgoing Response to the tracking ID of the key that produced it.
-   * This is how onSuccess / onRateLimit attribute events to the correct key
-   * without race conditions between concurrent requests.
-   */
   private responseKeyMap = new WeakMap<Response, string>();
 
-  /** Subclasses return the list of configured API keys (may be empty). */
+  /** Bind rate limiter + circuit breaker once `this.id` is available. */
+  protected ensureBound(): void {
+    if (this.storesBound) return;
+    const stores = getStores();
+    this.rateLimiter = stores.createRateLimiter();
+    this.circuitBreaker = stores.createCircuitBreaker(this.id);
+    this.storesBound = true;
+  }
+
   protected abstract getApiKeys(): string[];
 
-  /** Build the tracking ID for a given key index. */
   protected trackingId(keyIndex: number): string {
     return `${this.id}#${keyIndex}`;
   }
@@ -61,62 +64,55 @@ export abstract class BaseProvider implements ProviderAdapter {
     return { ...this.stats };
   }
 
-  getCircuitBreakerState(): CircuitBreakerState {
+  async getCircuitBreakerState(): Promise<CircuitBreakerState> {
+    this.ensureBound();
     return this.circuitBreaker.getState();
   }
 
-  /**
-   * Available when enabled, circuit closed, AND at least one key is not rate-limited.
-   * A single rate-limited key shouldn't disable the whole provider.
-   */
-  isAvailable(): boolean {
+  async isAvailable(): Promise<boolean> {
+    this.ensureBound();
     if (!this.isEnabled()) return false;
-    if (!this.circuitBreaker.isAllowed()) return false;
+    if (!(await this.circuitBreaker.isAllowed())) return false;
     const keys = this.getApiKeys();
     for (let i = 0; i < keys.length; i++) {
-      if (!this.rateLimiter.isRateLimited(this.trackingId(i))) return true;
+      if (!(await this.rateLimiter.isRateLimited(this.trackingId(i)))) return true;
     }
     return false;
   }
 
-  /** Per-key status for observability (dashboard, /v1/status). */
-  getKeysStatus(): KeyStatus[] {
+  async getKeysStatus(): Promise<KeyStatus[]> {
+    this.ensureBound();
     const keys = this.getApiKeys();
-    return keys.map((_, i) => {
+    const out: KeyStatus[] = [];
+    for (let i = 0; i < keys.length; i++) {
       const trackingId = this.trackingId(i);
-      const stats = this.rateLimiter.getWindowStats(trackingId);
-      return {
+      const stats = await this.rateLimiter.getWindowStats(trackingId);
+      out.push({
         index: i,
-        rateLimited: this.rateLimiter.isRateLimited(trackingId),
+        rateLimited: await this.rateLimiter.isRateLimited(trackingId),
         requestsInWindow: stats.requestsInWindow,
         maxRequests: stats.maxRequests,
         retryAfterMs: stats.retryAfterMs,
-      };
-    });
+      });
+    }
+    return out;
   }
 
-  /**
-   * Attribute a Response object to a specific key's tracking ID.
-   * Called by complete() (and subclass overrides) so onSuccess/onRateLimit
-   * can update rate-limiter state for the right key.
-   */
   protected attachResponseToKey(response: Response, trackingId: string): void {
     this.responseKeyMap.set(response, trackingId);
   }
 
-  /**
-   * Pick the next available key via round-robin, starting from the rotation index.
-   * Returns `undefined` if all keys are rate-limited.
-   * The rotation index is advanced synchronously so concurrent calls spread across keys.
-   */
-  protected pickKey(): { key: string; trackingId: string; keyIndex: number } | undefined {
+  protected async pickKey(): Promise<
+    { key: string; trackingId: string; keyIndex: number } | undefined
+  > {
+    this.ensureBound();
     const keys = this.getApiKeys();
     if (keys.length === 0) return undefined;
 
     for (let i = 0; i < keys.length; i++) {
       const idx = (this.keyRotationIndex + i) % keys.length;
       const trackingId = this.trackingId(idx);
-      if (!this.rateLimiter.isRateLimited(trackingId)) {
+      if (!(await this.rateLimiter.isRateLimited(trackingId))) {
         this.keyRotationIndex = (idx + 1) % keys.length;
         const key = keys[idx];
         if (!key) continue;
@@ -127,7 +123,8 @@ export abstract class BaseProvider implements ProviderAdapter {
   }
 
   async complete(request: ChatCompletionRequest): Promise<Response> {
-    const picked = this.pickKey();
+    this.ensureBound();
+    const picked = await this.pickKey();
     if (!picked) {
       throw new Error(
         `Provider ${this.name} has no available keys (all rate-limited or not configured)`,
@@ -136,7 +133,7 @@ export abstract class BaseProvider implements ProviderAdapter {
 
     this.stats.totalRequests++;
     this.stats.lastUsedAt = new Date().toISOString();
-    this.rateLimiter.recordRequest(picked.trackingId);
+    await this.rateLimiter.recordRequest(picked.trackingId);
 
     const mapped = this.mapRequest(request);
 
@@ -150,8 +147,6 @@ export abstract class BaseProvider implements ProviderAdapter {
       body: JSON.stringify(mapped),
     });
 
-    // Remember which key produced this Response so onSuccess/onRateLimit
-    // can attribute the result correctly under concurrency.
     this.attachResponseToKey(response, picked.trackingId);
     return response;
   }
@@ -169,33 +164,36 @@ export abstract class BaseProvider implements ProviderAdapter {
     return {};
   }
 
-  onSuccess(response: Response): void {
+  async onSuccess(response: Response): Promise<void> {
+    this.ensureBound();
     this.stats.successRequests++;
-    this.circuitBreaker.onSuccess();
+    await this.circuitBreaker.onSuccess();
     const trackingId = this.responseKeyMap.get(response);
-    if (trackingId) this.rateLimiter.clearRateLimit(trackingId);
+    if (trackingId) await this.rateLimiter.clearRateLimit(trackingId);
   }
 
-  onRateLimit(response: Response, retryAfterSeconds?: number): void {
+  async onRateLimit(response: Response, retryAfterSeconds?: number): Promise<void> {
+    this.ensureBound();
     this.stats.rateLimitedRequests++;
     const trackingId = this.responseKeyMap.get(response);
     if (trackingId) {
-      this.rateLimiter.markRateLimited(trackingId, retryAfterSeconds);
+      await this.rateLimiter.markRateLimited(trackingId, retryAfterSeconds);
     }
   }
 
-  onError(): void {
+  async onError(): Promise<void> {
+    this.ensureBound();
     this.stats.failedRequests++;
-    this.circuitBreaker.onFailure();
+    await this.circuitBreaker.onFailure();
     this.stats.lastError = new Date().toISOString();
   }
 
-  resetCircuitBreaker(): void {
-    this.circuitBreaker.reset();
-    // Clear rate-limit cooldowns on ALL keys when admin resets the provider
+  async resetCircuitBreaker(): Promise<void> {
+    this.ensureBound();
+    await this.circuitBreaker.reset();
     const keys = this.getApiKeys();
     for (let i = 0; i < keys.length; i++) {
-      this.rateLimiter.clearRateLimit(this.trackingId(i));
+      await this.rateLimiter.clearRateLimit(this.trackingId(i));
     }
   }
 }

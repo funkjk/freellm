@@ -31,6 +31,8 @@ class FakeProvider implements ProviderAdapter {
   readonly id: string;
   readonly name: string;
   readonly models: ModelObject[];
+  readonly supportsStreamUsage = false;
+  readonly supportsTools = true;
   callCount = 0;
   lastRetryAfterSeconds: number | undefined = undefined;
   private statuses: number[];
@@ -70,16 +72,16 @@ class FakeProvider implements ProviderAdapter {
   isEnabled(): boolean {
     return true;
   }
-  isAvailable(): boolean {
+  async isAvailable(): Promise<boolean> {
     return !this.rateLimited;
   }
   getStats(): ProviderStats {
     return { ...this.statsObj };
   }
-  getCircuitBreakerState(): CircuitBreakerState {
+  async getCircuitBreakerState(): Promise<CircuitBreakerState> {
     return this.cbState;
   }
-  getKeysStatus(): KeyStatus[] {
+  async getKeysStatus(): Promise<KeyStatus[]> {
     return [
       {
         index: 0,
@@ -108,19 +110,19 @@ class FakeProvider implements ProviderAdapter {
     });
   }
 
-  onSuccess(): void {
+  async onSuccess(): Promise<void> {
     this.statsObj.successRequests++;
   }
-  onRateLimit(_response: Response, retryAfterSeconds?: number): void {
+  async onRateLimit(_response: Response, retryAfterSeconds?: number): Promise<void> {
     this.statsObj.rateLimitedRequests++;
     this.rateLimited = true;
     this.lastRetryAfterSeconds = retryAfterSeconds;
   }
-  onError(): void {
+  async onError(): Promise<void> {
     this.statsObj.failedRequests++;
     this.cbState = "open";
   }
-  resetCircuitBreaker(): void {
+  async resetCircuitBreaker(): Promise<void> {
     this.cbState = "closed";
     this.rateLimited = false;
   }
@@ -130,33 +132,48 @@ function fakeRegistry(providers: FakeProvider[]): ProviderRegistry {
   return {
     getAll: () => providers,
     getEnabled: () => providers,
-    getAvailable: () => providers.filter((p) => p.isAvailable()),
+    getAvailable: async () => {
+      const out: FakeProvider[] = [];
+      for (const p of providers) {
+        if (await p.isAvailable()) out.push(p);
+      }
+      return out;
+    },
     getById: (id: string) => providers.find((p) => p.id === id),
     getAllModels: () => providers.flatMap((p) => p.models),
-    getProviderForMetaModel: (
+    getProviderForMetaModel: async (
       _meta: string,
       excluded: Set<string>,
-    ): ProviderAdapter | undefined => {
-      return providers.find((p) => p.isAvailable() && !excluded.has(p.id));
+    ): Promise<ProviderAdapter | undefined> => {
+      for (const p of providers) {
+        if (excluded.has(p.id)) continue;
+        if (await p.isAvailable()) return p;
+      }
+      return undefined;
     },
-    getStatusAll: (): ProviderStatusInfo[] =>
-      providers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        enabled: p.isEnabled(),
-        circuitBreakerState: p.getCircuitBreakerState(),
-        totalRequests: p.getStats().totalRequests,
-        successRequests: p.getStats().successRequests,
-        failedRequests: p.getStats().failedRequests,
-        rateLimitedRequests: p.getStats().rateLimitedRequests,
-        lastError: null,
-        lastUsedAt: null,
-        models: p.models.map((m) => m.id),
-        keyCount: 1,
-        keysAvailable: p.isAvailable() ? 1 : 0,
-        keys: p.getKeysStatus(),
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 },
-      })),
+    getStatusAll: async (): Promise<ProviderStatusInfo[]> =>
+      Promise.all(
+        providers.map(async (p) => {
+          const keys = await p.getKeysStatus();
+          return {
+            id: p.id,
+            name: p.name,
+            enabled: p.isEnabled(),
+            circuitBreakerState: await p.getCircuitBreakerState(),
+            totalRequests: p.getStats().totalRequests,
+            successRequests: p.getStats().successRequests,
+            failedRequests: p.getStats().failedRequests,
+            rateLimitedRequests: p.getStats().rateLimitedRequests,
+            lastError: null,
+            lastUsedAt: null,
+            models: p.models.map((m) => m.id),
+            keyCount: 1,
+            keysAvailable: (await p.isAvailable()) ? 1 : 0,
+            keys,
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 },
+          };
+        }),
+      ),
   } as unknown as ProviderRegistry;
 }
 

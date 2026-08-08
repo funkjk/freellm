@@ -46,7 +46,7 @@ async function normalizeError(err: unknown): Promise<FreeLLMError> {
   if (err instanceof ProviderClientError) {
     const message = await safeUpstreamMessage(err.upstreamResponse, err.message);
     if (err.statusCode === 429) {
-      const advice = buildRetryAdvice(registry.getStatusAll(), [err.providerId]);
+      const advice = buildRetryAdvice(await registry.getStatusAll(), [err.providerId]);
       return freellmError({
         code: "provider_rate_limited",
         message: redactSecrets(message),
@@ -65,7 +65,7 @@ async function normalizeError(err: unknown): Promise<FreeLLMError> {
   }
 
   if (err instanceof AllProvidersExhaustedError) {
-    const advice = buildRetryAdvice(registry.getStatusAll(), err.triedProviders);
+    const advice = buildRetryAdvice(await registry.getStatusAll(), err.triedProviders);
     return freellmError({
       code: "all_providers_exhausted",
       message: redactSecrets(err.message),

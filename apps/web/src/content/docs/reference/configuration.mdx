@@ -49,6 +49,31 @@ ALLOWED_ORIGINS=             # comma-separated CORS origins
 
 When `FREELLM_API_KEY` is empty, all requests pass through (good for local dev). When set, every non-health request must include `Authorization: Bearer <key>`.
 
+## State backend
+
+```bash
+FREELLM_STATE_BACKEND=memory   # or "redis"
+UPSTASH_REDIS_REST_URL=        # required when backend=redis
+UPSTASH_REDIS_REST_TOKEN=      # required when backend=redis
+```
+
+Default is process-local memory (single container). Set `redis` with [Upstash](https://upstash.com/) credentials when running multiple instances or on Vercel so rate limits, circuit breakers, cache, usage, and virtual-key caps are shared.
+
+## Virtual keys
+
+```bash
+FREELLM_VIRTUAL_KEYS_PATH=     # path to virtual-keys.json (containers)
+FREELLM_VIRTUAL_KEYS_JSON=     # same JSON as an env string (serverless); wins if both set
+```
+
+## Streaming
+
+```bash
+STREAM_IDLE_TIMEOUT_MS=30000   # SSE keep-alive comment cadence
+```
+
+Heartbeats help proxies keep slow streams open. On Vercel, `maxDuration` can still end a long stream; FreeLLM does not attempt to resume truncated SSE.
+
 ## Logging
 
 ```bash
