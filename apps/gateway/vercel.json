@@ -3,7 +3,7 @@
   "version": 2,
   "framework": null,
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false",
-  "buildCommand": "cd ../.. && pnpm --filter @freellm/dashboard build && node apps/gateway/scripts/sync-dashboard-public.mjs",
+  "buildCommand": "cd ../.. && pnpm --filter @freellm/dashboard build && node apps/gateway/scripts/sync-dashboard-public.mjs && pnpm --filter @freellm/gateway run build:vercel",
   "outputDirectory": "public",
   "rewrites": [
     { "source": "/healthz", "destination": "/api" },
@@ -12,8 +12,9 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/index.ts": {
-      "maxDuration": 60
+    "api/index.js": {
+      "maxDuration": 60,
+      "includeFiles": "dist/**"
     }
   }
 }
