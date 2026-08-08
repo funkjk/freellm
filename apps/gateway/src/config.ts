@@ -28,7 +28,7 @@ export const META_MODELS = new Set(["free", "free-fast", "free-smart"]);
 /** Default concrete model to use per provider when a meta-model is requested. */
 export const DEFAULT_MODELS: Record<string, string> = {
   groq: "llama-3.3-70b-versatile",
-  gemini: "gemini-2.5-flash",
+  gemini: "gemini-flash-latest",
   mistral: "mistral-small-latest",
   cerebras: "llama3.1-8b",
   nim: "meta/llama-3.3-70b-instruct",

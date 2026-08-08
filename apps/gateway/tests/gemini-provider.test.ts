@@ -25,19 +25,22 @@ function gemini() {
 
 function baseRequest(overrides: Partial<ChatCompletionRequest> = {}): ChatCompletionRequest {
   return {
-    model: "gemini/gemini-2.5-flash",
+    model: "gemini/gemini-flash-latest",
     messages: [{ role: "user", content: "hi" }],
     ...overrides,
   };
 }
 
 describe("defaultReasoningEffortFor", () => {
-  it("returns 'none' for gemini-2.5-flash (model accepts zero thinking budget)", () => {
+  it("returns 'none' for flash models (accept zero thinking budget)", () => {
     expect(defaultReasoningEffortFor("gemini-2.5-flash")).toBe("none");
+    expect(defaultReasoningEffortFor("gemini-flash-latest")).toBe("none");
+    expect(defaultReasoningEffortFor("gemini-flash-lite-latest")).toBe("none");
   });
 
-  it("returns 'low' for gemini-2.5-pro (model rejects 'none' with HTTP 400)", () => {
+  it("returns 'low' for pro models (reject 'none' with HTTP 400)", () => {
     expect(defaultReasoningEffortFor("gemini-2.5-pro")).toBe("low");
+    expect(defaultReasoningEffortFor("gemini-pro-latest")).toBe("low");
   });
 
   it("returns 'low' as a conservative fallback for unknown model ids", () => {
@@ -47,16 +50,16 @@ describe("defaultReasoningEffortFor", () => {
 });
 
 describe("GeminiProvider.mapRequest reasoning_effort default", () => {
-  it("injects 'none' on gemini-2.5-flash when the caller did not set one", () => {
+  it("injects 'none' on gemini-flash-latest when the caller did not set one", () => {
     const mapped = gemini().exposeMapRequest(
-      baseRequest({ model: "gemini/gemini-2.5-flash", max_tokens: 1000 }),
+      baseRequest({ model: "gemini/gemini-flash-latest", max_tokens: 1000 }),
     );
     expect(mapped.reasoning_effort).toBe("none");
   });
 
-  it("injects 'low' on gemini-2.5-pro when the caller did not set one", () => {
+  it("injects 'low' on gemini-pro-latest when the caller did not set one", () => {
     const mapped = gemini().exposeMapRequest(
-      baseRequest({ model: "gemini/gemini-2.5-pro", max_tokens: 1000 }),
+      baseRequest({ model: "gemini/gemini-pro-latest", max_tokens: 1000 }),
     );
     expect(mapped.reasoning_effort).toBe("low");
   });
@@ -68,10 +71,10 @@ describe("GeminiProvider.mapRequest reasoning_effort default", () => {
     expect(mapped.reasoning_effort).toBe("high");
   });
 
-  it("respects an explicit 'none' from the caller on 2.5-pro (caller accepts the upstream 400)", () => {
+  it("respects an explicit 'none' from the caller on pro (caller accepts the upstream 400)", () => {
     const mapped = gemini().exposeMapRequest(
       baseRequest({
-        model: "gemini/gemini-2.5-pro",
+        model: "gemini/gemini-pro-latest",
         reasoning_effort: "none",
         max_tokens: 1000,
       }),
@@ -87,10 +90,16 @@ describe("GeminiProvider catalog", () => {
     expect(ids).not.toContain("gemini/gemini-2.0-flash-lite");
   });
 
-  it("lists the 2.5 family", () => {
+  it("lists floating -latest aliases ahead of the pinned 2.5 family", () => {
     const ids = new GeminiProvider().models.map((m) => m.id);
+    expect(ids).toContain("gemini/gemini-flash-latest");
+    expect(ids).toContain("gemini/gemini-flash-lite-latest");
+    expect(ids).toContain("gemini/gemini-pro-latest");
     expect(ids).toContain("gemini/gemini-2.5-flash");
     expect(ids).toContain("gemini/gemini-2.5-pro");
+    expect(ids.indexOf("gemini/gemini-flash-latest")).toBeLessThan(
+      ids.indexOf("gemini/gemini-2.5-flash"),
+    );
   });
 });
 
@@ -129,8 +138,8 @@ describe("GeminiProvider.mapRequest max_completion_tokens normalization", () => 
 
 describe("GeminiProvider.mapRequest base behavior preserved", () => {
   it("still strips the 'gemini/' prefix from the model name", () => {
-    const mapped = gemini().exposeMapRequest(baseRequest({ model: "gemini/gemini-2.5-flash" }));
-    expect(mapped.model).toBe("gemini-2.5-flash");
+    const mapped = gemini().exposeMapRequest(baseRequest({ model: "gemini/gemini-flash-latest" }));
+    expect(mapped.model).toBe("gemini-flash-latest");
   });
 
   it("preserves messages, temperature, and other untouched fields", () => {

@@ -149,7 +149,7 @@ Don't pick a provider. Pick a strategy.
 | `free-fast` | Lowest-latency provider first (Groq, Cerebras, Gemini, NIM) | You're building a chatbot or real-time UI |
 | `free-smart` | Most capable provider first (Gemini, NIM, Groq, Mistral) | You need stronger reasoning or longer context |
 
-Need a specific model? Target it directly: `groq/llama-3.3-70b-versatile`, `gemini/gemini-2.5-flash`, `nim/deepseek-ai/deepseek-r1`.
+Need a specific model? Target it directly: `groq/llama-3.3-70b-versatile`, `gemini/gemini-flash-latest`, `nim/deepseek-ai/deepseek-r1`.
 
 ### Multi-key rotation (stack your free tiers)
 
@@ -326,7 +326,7 @@ If you want the full reasoning power back, override it per request:
 curl https://your-gateway/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini/gemini-2.5-flash",
+    "model": "gemini/gemini-flash-latest",
     "messages": [{"role": "user", "content": "Prove P != NP"}],
     "max_tokens": 4000,
     "reasoning_effort": "high"
