@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "installCommand": "pnpm install --frozen-lockfile=false",
-  "buildCommand": "pnpm --filter @freellm/dashboard build && node apps/gateway/scripts/sync-dashboard-public.mjs && node -e \"const fs=require('fs');fs.rmSync('public',{recursive:true,force:true});fs.cpSync('apps/gateway/public','public',{recursive:true});\"",
+  "buildCommand": "pnpm --filter @freellm/dashboard build && node apps/gateway/scripts/sync-dashboard-public.mjs",
+  "outputDirectory": "apps/gateway/public",
   "rewrites": [
     { "source": "/healthz", "destination": "/api" },
     { "source": "/v1/(.*)", "destination": "/api" },

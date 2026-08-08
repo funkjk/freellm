@@ -1,7 +1,6 @@
 node_modules/
 dist/
 apps/gateway/public/
-/public/
 .env
 *.tsbuildinfo
 .turbo/
