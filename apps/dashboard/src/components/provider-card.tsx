@@ -220,12 +220,14 @@ export function ProviderCard({
       <div className="grid grid-cols-2 gap-2 text-sm font-mono mb-4">
         <div className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
           <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
-            Success
+            Success (24h)
           </span>
           <span className="text-foreground font-medium">{provider.successRequests}</span>
         </div>
         <div className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-          <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Failed</span>
+          <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
+            Failed (24h)
+          </span>
           <span
             className={cn(
               "font-medium",

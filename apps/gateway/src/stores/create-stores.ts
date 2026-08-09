@@ -20,6 +20,17 @@ import { MemoryProviderDisableStore } from "./provider-disable/memory.js";
 import type { ProviderDisableStore } from "./provider-disable/types.js";
 import { MemoryVirtualKeyCounterStore } from "./virtual-keys/memory.js";
 import type { VirtualKeyCounterStore } from "./virtual-keys/types.js";
+import { MemoryRequestMetricsStore } from "./request-metrics/memory.js";
+import type { RequestMetricsStore } from "./request-metrics/types.js";
+import { MemoryRequestLogStore } from "./request-log/memory.js";
+import type { RequestLogStore } from "./request-log/types.js";
+import { MemoryRoutingConfigStore } from "./routing-config/memory.js";
+import type { RoutingConfigStore } from "./routing-config/types.js";
+
+function requestLogMaxEntries(): number {
+  const n = Number.parseInt(process.env.REQUEST_LOG_MAX_ENTRIES ?? "500", 10);
+  return Number.isFinite(n) && n >= 1 ? n : 500;
+}
 
 export interface GatewayStores {
   backend: StateBackend;
@@ -31,9 +42,13 @@ export interface GatewayStores {
   usageTracker: UsageTrackerStore;
   vkCounters: VirtualKeyCounterStore;
   providerDisable: ProviderDisableStore;
+  requestMetrics: RequestMetricsStore;
+  requestLogStore: RequestLogStore;
+  routingConfig: RoutingConfigStore;
 }
 
 function createMemoryStores(): GatewayStores {
+  const maxLog = requestLogMaxEntries();
   return {
     backend: "memory",
     redis: null,
@@ -51,6 +66,9 @@ function createMemoryStores(): GatewayStores {
     usageTracker: new MemoryUsageTrackerStore(),
     vkCounters: new MemoryVirtualKeyCounterStore(),
     providerDisable: new MemoryProviderDisableStore(),
+    requestMetrics: new MemoryRequestMetricsStore(),
+    requestLogStore: new MemoryRequestLogStore(maxLog),
+    routingConfig: new MemoryRoutingConfigStore(),
   };
 }
 
@@ -76,8 +94,12 @@ export async function createStores(
   const { RedisUsageTrackerStore } = await import("./usage/redis.js");
   const { RedisVirtualKeyCounterStore } = await import("./virtual-keys/redis.js");
   const { RedisProviderDisableStore } = await import("./provider-disable/redis.js");
+  const { RedisRequestMetricsStore } = await import("./request-metrics/redis.js");
+  const { RedisRequestLogStore } = await import("./request-log/redis.js");
+  const { RedisRoutingConfigStore } = await import("./routing-config/redis.js");
 
   const redis = createRedisClient();
+  const maxLog = requestLogMaxEntries();
   return {
     backend: "redis",
     redis,
@@ -97,13 +119,14 @@ export async function createStores(
     usageTracker: new RedisUsageTrackerStore(redis),
     vkCounters: new RedisVirtualKeyCounterStore(redis),
     providerDisable: new RedisProviderDisableStore(redis),
+    requestMetrics: new RedisRequestMetricsStore(redis),
+    requestLogStore: new RedisRequestLogStore(redis, maxLog),
+    routingConfig: new RedisRoutingConfigStore(redis),
   };
 }
 
 /** Initialize (or return) the process-wide store singleton. */
-export async function initStores(
-  backend?: StateBackend,
-): Promise<GatewayStores> {
+export async function initStores(backend?: StateBackend): Promise<GatewayStores> {
   if (_stores && (backend === undefined || backend === _stores.backend)) {
     return _stores;
   }

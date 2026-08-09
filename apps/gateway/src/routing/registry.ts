@@ -7,6 +7,10 @@ import { MistralProvider } from "../providers/mistral.js";
 import { NimProvider } from "../providers/nim.js";
 import { OllamaProvider } from "../providers/ollama.js";
 import type { ProviderAdapter } from "../providers/types.js";
+import {
+  emptyOutcomeTotals,
+  type OutcomeTotals,
+} from "../stores/request-metrics/types.js";
 import type {
   ModelObject,
   ProviderStatusInfo,
@@ -101,25 +105,28 @@ export class ProviderRegistry {
 
   async getStatusAll(
     usageByProvider: Record<string, TokenUsageTotals> = {},
+    outcomeByProvider: Record<string, OutcomeTotals> = {},
   ): Promise<ProviderStatusInfo[]> {
     const result: ProviderStatusInfo[] = [];
     for (const p of this.providers) {
-      const stats = p.getStats();
+      const live = p.getStats();
       const keys = await p.getKeysStatus();
       const privacyEntry = PROVIDER_PRIVACY[p.id];
       const modelStatus = await p.getModelsStatus();
+      const outcomes = outcomeByProvider[p.id] ?? emptyOutcomeTotals();
       result.push({
         id: p.id,
         name: p.name,
         enabled: p.isEnabled(),
         disabled: await p.isManuallyDisabled(),
         circuitBreakerState: await p.getCircuitBreakerState(),
-        totalRequests: stats.totalRequests,
-        successRequests: stats.successRequests,
-        failedRequests: stats.failedRequests,
-        rateLimitedRequests: stats.rateLimitedRequests,
-        lastError: stats.lastError ?? null,
-        lastUsedAt: stats.lastUsedAt ?? null,
+        totalRequests: outcomes.totalRequests,
+        successRequests: outcomes.successRequests,
+        // Dashboard "Failed" = non-success (hard errors + rate limits).
+        failedRequests: outcomes.failedRequests + outcomes.rateLimitedRequests,
+        rateLimitedRequests: outcomes.rateLimitedRequests,
+        lastError: live.lastError ?? null,
+        lastUsedAt: live.lastUsedAt ?? null,
         models: p.models.map((m) => m.id),
         keyCount: keys.length,
         keysAvailable: keys.filter((k) => !k.rateLimited).length,

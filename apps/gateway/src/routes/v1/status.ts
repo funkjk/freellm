@@ -9,9 +9,14 @@ import { getVirtualKeyStore } from "../../features/virtual-keys.js";
 import { adminAuth } from "../../middleware/admin-auth.js";
 import { validate } from "../../middleware/validate.js";
 import type { ProviderAdapter } from "../../providers/types.js";
-import { router as gatewayRouter, registry } from "../../routing/index.js";
+import {
+  router as gatewayRouter,
+  registry,
+  setRoutingStrategy,
+} from "../../routing/index.js";
 import { updateProviderSchema, updateRoutingSchema } from "../../schemas.js";
 import { getStores } from "../../stores/create-stores.js";
+import { emptyOutcomeTotals } from "../../stores/request-metrics/types.js";
 import type { BrowserTokensInfo, ProviderStatusInfo, RoutingStrategy } from "../../types.js";
 
 function browserTokensInfo(): BrowserTokensInfo {
@@ -22,23 +27,45 @@ function browserTokensInfo(): BrowserTokensInfo {
   };
 }
 
+async function buildGatewayStatus() {
+  const { byProvider: outcomeByProvider, gateway: outcomes } =
+    await gatewayRouter.requestLog.getOutcomeTotals();
+  const recentRequests = await gatewayRouter.requestLog.getRecent(50);
+  const { byProvider, gateway } = await gatewayRouter.usageTracker.getAllTotals();
+  const cacheStats = await gatewayRouter.cache.getStats();
+
+  return {
+    routingStrategy: gatewayRouter.strategy,
+    totalRequests: outcomes.totalRequests,
+    successRequests: outcomes.successRequests,
+    failedRequests: outcomes.failedRequests + outcomes.rateLimitedRequests,
+    providers: await registry.getStatusAll(byProvider, outcomeByProvider),
+    recentRequests,
+    usage: gateway,
+    cache: cacheStats,
+    browserTokens: browserTokensInfo(),
+  };
+}
+
 async function providerStatusPayload(provider: ProviderAdapter): Promise<ProviderStatusInfo> {
-  const stats = provider.getStats();
+  const live = provider.getStats();
   const keys = await provider.getKeysStatus();
   const usage = await gatewayRouter.usageTracker.getTotals(provider.id);
   const modelStatus = await provider.getModelsStatus();
+  const { byProvider } = await gatewayRouter.requestLog.getOutcomeTotals();
+  const outcomes = byProvider[provider.id] ?? emptyOutcomeTotals();
   return {
     id: provider.id,
     name: provider.name,
     enabled: provider.isEnabled(),
     disabled: await provider.isManuallyDisabled(),
     circuitBreakerState: await provider.getCircuitBreakerState(),
-    totalRequests: stats.totalRequests,
-    successRequests: stats.successRequests,
-    failedRequests: stats.failedRequests,
-    rateLimitedRequests: stats.rateLimitedRequests,
-    lastError: stats.lastError ?? null,
-    lastUsedAt: stats.lastUsedAt ?? null,
+    totalRequests: outcomes.totalRequests,
+    successRequests: outcomes.successRequests,
+    failedRequests: outcomes.failedRequests + outcomes.rateLimitedRequests,
+    rateLimitedRequests: outcomes.rateLimitedRequests,
+    lastError: live.lastError ?? null,
+    lastUsedAt: live.lastUsedAt ?? null,
     models: provider.models.map((m) => m.id),
     keyCount: keys.length,
     keysAvailable: keys.filter((k) => !k.rateLimited).length,
@@ -58,22 +85,7 @@ statusRouter.patch("/routing", adminAuth);
 statusRouter.get("/virtual-keys", adminAuth);
 
 statusRouter.get("/", async (_req, res) => {
-  const stats = gatewayRouter.requestLog.getStats();
-  const recentRequests = gatewayRouter.requestLog.getRecent(50);
-  const { byProvider, gateway } = await gatewayRouter.usageTracker.getAllTotals();
-  const cacheStats = await gatewayRouter.cache.getStats();
-
-  res.json({
-    routingStrategy: gatewayRouter.strategy,
-    totalRequests: stats.totalRequests,
-    successRequests: stats.successRequests,
-    failedRequests: stats.failedRequests,
-    providers: await registry.getStatusAll(byProvider),
-    recentRequests,
-    usage: gateway,
-    cache: cacheStats,
-    browserTokens: browserTokensInfo(),
-  });
+  res.json(await buildGatewayStatus());
 });
 
 statusRouter.post("/providers/:providerId/reset", async (req, res, next: NextFunction) => {
@@ -101,10 +113,10 @@ statusRouter.post("/reset", async (_req, res) => {
   for (const provider of providers) {
     await provider.resetCircuitBreaker();
   }
-  const { byProvider } = await gatewayRouter.usageTracker.getAllTotals();
+  const status = await buildGatewayStatus();
   res.json({
     reset: providers.map((p) => p.id),
-    providers: await registry.getStatusAll(byProvider),
+    providers: status.providers,
   });
 });
 
@@ -166,24 +178,8 @@ statusRouter.get("/virtual-keys", async (_req, res) => {
 
 statusRouter.patch("/routing", validate(updateRoutingSchema), async (req, res) => {
   const { strategy } = req.body as { strategy: RoutingStrategy };
-
-  gatewayRouter.strategy = strategy;
-  const stats = gatewayRouter.requestLog.getStats();
-  const recentRequests = gatewayRouter.requestLog.getRecent(50);
-  const { byProvider, gateway } = await gatewayRouter.usageTracker.getAllTotals();
-  const cacheStats = await gatewayRouter.cache.getStats();
-
-  res.json({
-    routingStrategy: gatewayRouter.strategy,
-    totalRequests: stats.totalRequests,
-    successRequests: stats.successRequests,
-    failedRequests: stats.failedRequests,
-    providers: await registry.getStatusAll(byProvider),
-    recentRequests,
-    usage: gateway,
-    cache: cacheStats,
-    browserTokens: browserTokensInfo(),
-  });
+  await setRoutingStrategy(strategy);
+  res.json(await buildGatewayStatus());
 });
 
 export default statusRouter;

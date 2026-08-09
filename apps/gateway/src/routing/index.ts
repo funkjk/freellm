@@ -1,5 +1,5 @@
 import { ObservabilityStore } from "../observability/index.js";
-import { initStores } from "../stores/create-stores.js";
+import { getStores, initStores } from "../stores/create-stores.js";
 import { ProviderRegistry } from "./registry.js";
 import { GatewayRouter } from "./router.js";
 
@@ -23,8 +23,21 @@ export async function bootstrapRouting(force = false): Promise<void> {
   obs = new ObservabilityStore({
     cacheBackend: stores.cacheBackend,
     usageStore: stores.usageTracker,
+    requestLogStore: stores.requestLogStore,
+    requestMetrics: stores.requestMetrics,
   });
   registry = new ProviderRegistry();
   router = new GatewayRouter(registry, obs);
+  router.strategy = await stores.routingConfig.getStrategy();
   bootstrapped = true;
+}
+
+/** Persist and apply a routing strategy change. */
+export async function setRoutingStrategy(
+  strategy: "round_robin" | "random",
+): Promise<"round_robin" | "random"> {
+  const stores = getStores();
+  await stores.routingConfig.setStrategy(strategy);
+  router.strategy = strategy;
+  return strategy;
 }

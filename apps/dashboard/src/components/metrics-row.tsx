@@ -27,7 +27,7 @@ export function MetricsRow({
 }: MetricsRowProps) {
   const items = [
     {
-      label: "Total",
+      label: "Total (24h)",
       value: total.toLocaleString(),
       sub: undefined,
       icon: Activity,
@@ -35,7 +35,7 @@ export function MetricsRow({
       glow: "",
     },
     {
-      label: "Success",
+      label: "Success (24h)",
       value: success.toLocaleString(),
       sub: undefined,
       icon: CheckCircle2,
@@ -43,7 +43,7 @@ export function MetricsRow({
       glow: "shadow-[inset_0_1px_0_rgba(45,212,140,0.06)]",
     },
     {
-      label: "Failed",
+      label: "Failed (24h)",
       value: failed.toLocaleString(),
       sub: undefined,
       icon: XCircle,

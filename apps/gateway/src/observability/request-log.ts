@@ -1,21 +1,26 @@
 import { randomUUID } from "node:crypto";
-import type { RequestLogEntry } from "../types.js";
+import type { RequestLogStore } from "../stores/request-log/types.js";
+import { MemoryRequestLogStore } from "../stores/request-log/memory.js";
+import {
+  outcomeKindFromStatus,
+  type RequestMetricsStore,
+} from "../stores/request-metrics/types.js";
+import { MemoryRequestMetricsStore } from "../stores/request-metrics/memory.js";
+import type { RequestLogEntry, RequestStatus } from "../types.js";
+import type { OutcomeTotals } from "../stores/request-metrics/types.js";
+import { emptyOutcomeTotals } from "../stores/request-metrics/types.js";
+import { logger } from "../logger.js";
 
-const MAX_LOG_ENTRIES = 500;
-
-export interface GatewayStats {
-  totalRequests: number;
-  successRequests: number;
-  failedRequests: number;
-}
+const UNKNOWN_PROVIDER = "_unknown";
 
 export class RequestLog {
-  private entries: RequestLogEntry[] = [];
-  private stats: GatewayStats = {
-    totalRequests: 0,
-    successRequests: 0,
-    failedRequests: 0,
-  };
+  private readonly store: RequestLogStore;
+  private readonly metrics: RequestMetricsStore;
+
+  constructor(opts?: { store?: RequestLogStore; metrics?: RequestMetricsStore }) {
+    this.store = opts?.store ?? new MemoryRequestLogStore();
+    this.metrics = opts?.metrics ?? new MemoryRequestMetricsStore();
+  }
 
   add(entry: Omit<RequestLogEntry, "id" | "timestamp">): RequestLogEntry {
     const full: RequestLogEntry = {
@@ -24,26 +29,38 @@ export class RequestLog {
       ...entry,
     };
 
-    this.entries.unshift(full);
-    if (this.entries.length > MAX_LOG_ENTRIES) {
-      this.entries.pop();
-    }
-
-    this.stats.totalRequests++;
-    if (entry.status === "success") {
-      this.stats.successRequests++;
-    } else {
-      this.stats.failedRequests++;
-    }
-
+    void this.persist(full, entry.status, entry.provider);
     return full;
   }
 
-  getRecent(limit = 50): RequestLogEntry[] {
-    return this.entries.slice(0, limit);
+  private async persist(
+    full: RequestLogEntry,
+    status: RequestStatus,
+    provider: string | null | undefined,
+  ): Promise<void> {
+    try {
+      await this.store.append(full);
+      const providerId =
+        typeof provider === "string" && provider.length > 0 ? provider : UNKNOWN_PROVIDER;
+      await this.metrics.record(providerId, outcomeKindFromStatus(status));
+    } catch (err) {
+      logger.warn({ err }, "failed to persist request log / metrics");
+    }
   }
 
-  getStats(): GatewayStats {
-    return { ...this.stats };
+  async getRecent(limit = 50): Promise<RequestLogEntry[]> {
+    return this.store.getRecent(limit);
+  }
+
+  async getOutcomeTotals(): Promise<{
+    byProvider: Record<string, OutcomeTotals>;
+    gateway: OutcomeTotals;
+  }> {
+    try {
+      return await this.metrics.getAllTotals();
+    } catch (err) {
+      logger.warn({ err }, "failed to read request metrics");
+      return { byProvider: {}, gateway: emptyOutcomeTotals() };
+    }
   }
 }

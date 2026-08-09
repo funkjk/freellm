@@ -375,7 +375,7 @@ describe("GatewayRouter.complete finish_reason handling", () => {
 
     await router.complete(baseRequest("m"));
 
-    const recent = router.requestLog.getRecent(10);
+    const recent = await router.requestLog.getRecent(10);
     expect(recent[0]).toBeDefined();
     expect(recent[0]?.finishReason).toBe("length");
   });
