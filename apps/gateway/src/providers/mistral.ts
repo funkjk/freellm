@@ -5,6 +5,8 @@ export class MistralProvider extends BaseProvider {
   readonly id = "mistral";
   readonly name = "Mistral";
   override readonly supportsStreamUsage = true;
+  /** Organization rate limits are applied per model. */
+  override readonly rateLimitScope = "model" as const;
 
   get baseUrl(): string {
     return process.env.MISTRAL_BASE_URL ?? "https://api.mistral.ai/v1";

@@ -33,13 +33,13 @@ function baseRequest(overrides: Partial<ChatCompletionRequest> = {}): ChatComple
 
 describe("defaultReasoningEffortFor", () => {
   it("returns undefined for flash models (omit field; Google rejects 'none')", () => {
-    expect(defaultReasoningEffortFor("gemini-2.5-flash")).toBeUndefined();
+    expect(defaultReasoningEffortFor("gemini-3.6-flash")).toBeUndefined();
+    expect(defaultReasoningEffortFor("gemini-3.5-flash")).toBeUndefined();
     expect(defaultReasoningEffortFor("gemini-flash-latest")).toBeUndefined();
     expect(defaultReasoningEffortFor("gemini-flash-lite-latest")).toBeUndefined();
   });
 
   it("returns 'low' for pro models (reject 'none' with HTTP 400)", () => {
-    expect(defaultReasoningEffortFor("gemini-2.5-pro")).toBe("low");
     expect(defaultReasoningEffortFor("gemini-pro-latest")).toBe("low");
   });
 
@@ -84,22 +84,29 @@ describe("GeminiProvider.mapRequest reasoning_effort default", () => {
 });
 
 describe("GeminiProvider catalog", () => {
-  it("does not list the deprecated 2.0-flash models", () => {
+  it("does not list the retired 2.x Flash/Pro models", () => {
     const ids = new GeminiProvider().models.map((m) => m.id);
     expect(ids).not.toContain("gemini/gemini-2.0-flash");
     expect(ids).not.toContain("gemini/gemini-2.0-flash-lite");
+    expect(ids).not.toContain("gemini/gemini-2.5-flash");
+    expect(ids).not.toContain("gemini/gemini-2.5-pro");
   });
 
-  it("lists floating -latest aliases ahead of the pinned 2.5 family", () => {
+  it("lists floating -latest aliases and pinned Gemini 3.x Flash models", () => {
     const ids = new GeminiProvider().models.map((m) => m.id);
     expect(ids).toContain("gemini/gemini-flash-latest");
     expect(ids).toContain("gemini/gemini-flash-lite-latest");
     expect(ids).toContain("gemini/gemini-pro-latest");
-    expect(ids).toContain("gemini/gemini-2.5-flash");
-    expect(ids).toContain("gemini/gemini-2.5-pro");
+    expect(ids).toContain("gemini/gemini-3.6-flash");
+    expect(ids).toContain("gemini/gemini-3.5-flash");
+    expect(ids).toContain("gemini/gemini-3.5-flash-lite");
     expect(ids.indexOf("gemini/gemini-flash-latest")).toBeLessThan(
-      ids.indexOf("gemini/gemini-2.5-flash"),
+      ids.indexOf("gemini/gemini-3.6-flash"),
     );
+  });
+
+  it("marks rate limits as per-model so siblings can absorb a 429", () => {
+    expect(new GeminiProvider().rateLimitScope).toBe("model");
   });
 });
 

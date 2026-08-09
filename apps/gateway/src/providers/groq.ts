@@ -5,6 +5,8 @@ export class GroqProvider extends BaseProvider {
   readonly id = "groq";
   readonly name = "Groq";
   override readonly supportsStreamUsage = true;
+  /** Free-tier RPM/TPM/RPD are enforced per model (shared across keys in the org). */
+  override readonly rateLimitScope = "model" as const;
 
   get baseUrl(): string {
     return process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1";

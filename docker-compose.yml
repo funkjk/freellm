@@ -3,7 +3,7 @@ services:
     build: .
     container_name: freellm
     ports:
-      - "3000:3000"
+      - "5180:3000"
     env_file:
       - .env
     environment:

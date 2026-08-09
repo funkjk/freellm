@@ -17,14 +17,15 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: Number.parseInt(process.env.PORT ?? "5173", 10),
+    // Do not read PORT — that env is reserved for the gateway (.env PORT=5180).
+    port: Number.parseInt(process.env.DASHBOARD_PORT ?? "5181", 10),
     host: "0.0.0.0",
     proxy: {
       // Prefer 127.0.0.1 over localhost: on Windows, localhost often resolves to
-      // ::1 first, and another process (e.g. Docker) may own IPv6 :3000 while
-      // the gateway listens on 0.0.0.0:3000 (IPv4 only).
+      // ::1 first, and another process (e.g. Docker) may own IPv6 :5180 while
+      // the gateway listens on 0.0.0.0:5180 (IPv4 only).
       "/api": {
-        target: "http://127.0.0.1:3000",
+        target: "http://127.0.0.1:5180",
         changeOrigin: true,
       },
     },

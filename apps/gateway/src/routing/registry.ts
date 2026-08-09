@@ -1,5 +1,4 @@
 import { FAST_PRIORITY, SMART_PRIORITY, TOOLS_PRIORITY } from "../config.js";
-import { CerebrasProvider } from "../providers/cerebras.js";
 import { CloudflareProvider } from "../providers/cloudflare.js";
 import { GeminiProvider } from "../providers/gemini.js";
 import { GitHubModelsProvider } from "../providers/github.js";
@@ -31,7 +30,6 @@ export class ProviderRegistry {
       new GroqProvider(),
       new GeminiProvider(),
       new MistralProvider(),
-      new CerebrasProvider(),
       new NimProvider(),
       new CloudflareProvider(),
       new GitHubModelsProvider(),
@@ -109,6 +107,7 @@ export class ProviderRegistry {
       const stats = p.getStats();
       const keys = await p.getKeysStatus();
       const privacyEntry = PROVIDER_PRIVACY[p.id];
+      const modelStatus = await p.getModelsStatus();
       result.push({
         id: p.id,
         name: p.name,
@@ -125,6 +124,8 @@ export class ProviderRegistry {
         keyCount: keys.length,
         keysAvailable: keys.filter((k) => !k.rateLimited).length,
         keys,
+        rateLimitScope: p.rateLimitScope,
+        modelStatus: modelStatus.length > 0 ? modelStatus : undefined,
         usage: usageByProvider[p.id] ?? EMPTY_USAGE,
         privacy: privacyEntry
           ? {

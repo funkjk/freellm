@@ -33,7 +33,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   groq: "Groq",
   gemini: "Gemini",
   mistral: "Mistral",
-  cerebras: "Cerebras",
+  nim: "NVIDIA NIM",
+  cloudflare: "Cloudflare",
+  github: "GitHub Models",
   ollama: "Ollama",
   freellm: "FreeLLM Meta",
 };
@@ -75,7 +77,7 @@ export default function Models() {
     return acc;
   }, {});
 
-  const providerOrder = ["freellm", "groq", "gemini", "mistral", "cerebras", "ollama"];
+  const providerOrder = ["freellm", "groq", "gemini", "mistral", "nim", "cloudflare", "github", "ollama"];
   const sortedGroups = Object.entries(grouped).sort(([a], [b]) => {
     const ai = providerOrder.indexOf(a);
     const bi = providerOrder.indexOf(b);

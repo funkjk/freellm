@@ -126,7 +126,6 @@ describe("PROVIDER_PRIVACY catalog coverage", () => {
     "groq",
     "gemini",
     "mistral",
-    "cerebras",
     "nim",
     "cloudflare",
     "github",

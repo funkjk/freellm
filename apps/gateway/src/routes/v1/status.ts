@@ -26,6 +26,7 @@ async function providerStatusPayload(provider: ProviderAdapter): Promise<Provide
   const stats = provider.getStats();
   const keys = await provider.getKeysStatus();
   const usage = await gatewayRouter.usageTracker.getTotals(provider.id);
+  const modelStatus = await provider.getModelsStatus();
   return {
     id: provider.id,
     name: provider.name,
@@ -42,6 +43,8 @@ async function providerStatusPayload(provider: ProviderAdapter): Promise<Provide
     keyCount: keys.length,
     keysAvailable: keys.filter((k) => !k.rateLimited).length,
     keys,
+    rateLimitScope: provider.rateLimitScope,
+    modelStatus: modelStatus.length > 0 ? modelStatus : undefined,
     usage,
   };
 }
@@ -49,6 +52,7 @@ async function providerStatusPayload(provider: ProviderAdapter): Promise<Provide
 const statusRouter: IRouter = Router();
 
 statusRouter.post("/providers/:providerId/reset", adminAuth);
+statusRouter.post("/reset", adminAuth);
 statusRouter.patch("/providers/:providerId", adminAuth);
 statusRouter.patch("/routing", adminAuth);
 statusRouter.get("/virtual-keys", adminAuth);
@@ -86,8 +90,22 @@ statusRouter.post("/providers/:providerId/reset", async (req, res, next: NextFun
     return;
   }
 
+  // Clears circuit breaker + Redis/memory rate-limit cooldowns, streaks, windows.
   await provider.resetCircuitBreaker();
   res.json(await providerStatusPayload(provider));
+});
+
+/** Reset routing state for every configured provider (CB + rate-limit artifacts). */
+statusRouter.post("/reset", async (_req, res) => {
+  const providers = registry.getAll();
+  for (const provider of providers) {
+    await provider.resetCircuitBreaker();
+  }
+  const { byProvider } = await gatewayRouter.usageTracker.getAllTotals();
+  res.json({
+    reset: providers.map((p) => p.id),
+    providers: await registry.getStatusAll(byProvider),
+  });
 });
 
 statusRouter.patch(

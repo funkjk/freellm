@@ -51,8 +51,9 @@ body:
         - Groq
         - Gemini
         - Mistral
-        - Cerebras
         - NVIDIA NIM
+        - Cloudflare
+        - GitHub Models
         - Ollama
         - Not applicable
         - Don't know

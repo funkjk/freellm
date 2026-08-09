@@ -3,6 +3,9 @@ import { defineConfig } from "astro/config";
 
 export default defineConfig({
   site: "https://freellm.dev",
+  server: {
+    port: 5182,
+  },
   integrations: [
     starlight({
       title: "FreeLLM",

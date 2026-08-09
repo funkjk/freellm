@@ -35,6 +35,8 @@ import { BaseProvider, parseApiKeys } from "./base.js";
 export class CloudflareProvider extends BaseProvider {
   readonly id = "cloudflare";
   readonly name = "Cloudflare Workers AI";
+  /** Workers AI free limits are per account, per model. */
+  override readonly rateLimitScope = "model" as const;
 
   get baseUrl(): string {
     if (process.env.CLOUDFLARE_BASE_URL) return process.env.CLOUDFLARE_BASE_URL;

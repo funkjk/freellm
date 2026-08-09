@@ -1,6 +1,6 @@
 ---
 title: Providers
-description: All 6 supported LLM providers with their free tier limits and signup links.
+description: All 7 supported LLM providers with their free tier limits and signup links.
 ---
 
 | Provider | Free Tier (per key) | Models | Get a Key |
@@ -8,11 +8,12 @@ description: All 6 supported LLM providers with their free tier limits and signu
 | **Groq** | ~30 req/min | Llama 3.3 70B, Llama 3.1 8B, Llama 4 Scout, Qwen3 32B | [console.groq.com](https://console.groq.com) |
 | **Gemini** | ~15 req/min | Gemini 2.5 Flash, 2.5 Pro, 2.0 Flash, 2.0 Flash Lite | [aistudio.google.com](https://aistudio.google.com) |
 | **Mistral** | ~5 req/min | Mistral Small, Medium, Nemo | [console.mistral.ai](https://console.mistral.ai) |
-| **Cerebras** | ~30 req/min | Llama 3.1 8B, Qwen3 235B, GPT-OSS 120B | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | **NVIDIA NIM** | ~40 req/min | Llama 3.3 70B, Llama 3.1 405B, Nemotron 70B, DeepSeek R1 | [build.nvidia.com](https://build.nvidia.com) |
+| **Cloudflare Workers AI** | ~20 req/min | Llama 3.3 70B, Llama 3.2 3B, Mistral Small | [dash.cloudflare.com](https://dash.cloudflare.com) |
+| **GitHub Models** | ~15 req/min | GPT-4o-mini, Phi-4, Llama 3.3 70B, Mistral Large | [github.com/settings/tokens](https://github.com/settings/tokens) |
 | **Ollama** | Unlimited (local) | Any local model | [ollama.com](https://ollama.com) |
 
-**Combined free capacity:** ~120 req/min with one key each, **~360 req/min** with three keys per provider via [Multi-Key Rotation](/features/multi-key/). All $0.
+**Combined free capacity:** ~125 req/min with one key each, **~375 req/min** with three keys per provider via [Multi-Key Rotation](/features/multi-key/). All $0.
 
 ## Adding API keys
 
@@ -22,9 +23,8 @@ Set the corresponding env var. Each accepts a single key OR a comma-separated li
 GROQ_API_KEY=gsk_...,gsk_another,gsk_third   # 3× the Groq capacity
 GEMINI_API_KEY=AI...
 MISTRAL_API_KEY=...
-CEREBRAS_API_KEY=csk_...
 NVIDIA_NIM_API_KEY=nvapi-...
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-Only the providers with valid keys are enabled at runtime. You don't need to provide all six.
+Only the providers with valid keys are enabled at runtime. You don't need to provide all seven.

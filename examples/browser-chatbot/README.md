@@ -22,10 +22,10 @@ FREELLM_ALLOWED_ORIGIN=https://yoursite.com
 
 ## Run locally
 
-Point at a FreeLLM gateway running on port 3000:
+Point at a FreeLLM gateway running on port 5180:
 
 ```
-export FREELLM_BASE_URL=http://localhost:3000
+export FREELLM_BASE_URL=http://localhost:5180
 export FREELLM_API_KEY=sk-your-master-key
 export FREELLM_ALLOWED_ORIGIN=http://localhost:3001
 npx vercel dev --listen 3001

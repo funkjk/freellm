@@ -12,7 +12,7 @@
   <path d="M80 200 Q160 200 220 240" stroke="#3B82F6" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.9"/>
   <!-- Mistral - purple -->
   <path d="M70 260 Q150 260 220 260" stroke="#A855F7" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.9"/>
-  <!-- Cerebras - teal -->
+  <!-- accent - teal -->
   <path d="M80 320 Q160 320 220 280" stroke="#14B8A6" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.9"/>
   <!-- Ollama - slate -->
   <path d="M100 380 Q180 380 220 300" stroke="#64748B" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.9"/>

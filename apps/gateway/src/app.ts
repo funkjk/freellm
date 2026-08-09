@@ -86,7 +86,7 @@ app.use("/", router);
 app.use(errorHandler);
 
 // In production (and local gateway-only runs), serve the dashboard SPA from
-// the same process. Dev usually uses Vite on :5173 instead.
+// the same process. Dev usually uses Vite on :5181 instead.
 const dashboardDir = resolveDashboardDir();
 if (dashboardDir) {
   logger.info({ dashboardDir }, "serving dashboard static files");
@@ -99,7 +99,7 @@ if (dashboardDir) {
   });
 } else {
   logger.warn(
-    "dashboard build not found (apps/dashboard/dist/public). GET / will not serve the UI. Run `pnpm --filter @freellm/dashboard build` or use Vite on :5173.",
+    "dashboard build not found (apps/dashboard/dist/public). GET / will not serve the UI. Run `pnpm --filter @freellm/dashboard build` or use Vite on :5181.",
   );
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
@@ -124,7 +124,7 @@ if (dashboardDir) {
   <p>The gateway is running, but <code>apps/dashboard/dist/public</code> is missing.</p>
   <p>Build it, then restart:</p>
   <p><code>pnpm --filter @freellm/dashboard build</code></p>
-  <p>Or in local development open the Vite app at <a href="http://localhost:5173">http://localhost:5173</a>.</p>
+  <p>Or in local development open the Vite app at <a href="http://localhost:5181">http://localhost:5181</a>.</p>
   <p>API health: <a href="/healthz">/healthz</a></p>
 </body></html>`);
   });

@@ -17,8 +17,6 @@ services:
         sync: false
       - key: MISTRAL_API_KEY
         sync: false
-      - key: CEREBRAS_API_KEY
-        sync: false
       - key: NVIDIA_NIM_API_KEY
         sync: false
       # Optional security settings

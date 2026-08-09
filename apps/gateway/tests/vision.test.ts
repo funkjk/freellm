@@ -60,6 +60,7 @@ class StubProvider implements ProviderAdapter {
   callCount = 0;
   readonly supportsStreamUsage = false;
   readonly supportsTools = true;
+  readonly rateLimitScope = "key" as const;
   private cbState: CircuitBreakerState = "closed";
 
   constructor(
@@ -80,6 +81,9 @@ class StubProvider implements ProviderAdapter {
   async isAvailable(): Promise<boolean> {
     return true;
   }
+  async isAvailableForModel(_modelId: string): Promise<boolean> {
+    return true;
+  }
   getStats(): ProviderStats {
     return { totalRequests: 0, successRequests: 0, failedRequests: 0, rateLimitedRequests: 0 };
   }
@@ -90,6 +94,9 @@ class StubProvider implements ProviderAdapter {
     return [
       { index: 0, rateLimited: false, requestsInWindow: 0, maxRequests: 30, retryAfterMs: null },
     ];
+  }
+  async getModelsStatus() {
+    return [];
   }
   async complete(req: ChatCompletionRequest): Promise<Response> {
     this.callCount++;
@@ -282,36 +289,36 @@ describe("GatewayRouter — fail-fast for non-vision model", () => {
 describe("GatewayRouter — meta-model vision routing", () => {
   it("routes a vision meta-model request to a vision-capable provider", async () => {
     const textOnlyModel: ModelObject = {
-      id: "cerebras/llama-3.3-70b",
+      id: "groq/llama-3.3-70b",
       object: "model",
       created: 0,
       owned_by: "meta",
-      provider: "cerebras",
+      provider: "groq",
     };
     const visionModel: ModelObject = {
-      id: "gemini/gemini-2.5-flash",
+      id: "gemini/gemini-3.6-flash",
       object: "model",
       created: 0,
       owned_by: "google",
       provider: "gemini",
       supportsVision: true,
     };
-    const cerebras = new StubProvider("cerebras", [textOnlyModel]);
+    const groq = new StubProvider("groq", [textOnlyModel]);
     const gemini = new StubProvider("gemini", [visionModel]);
 
-    // Registry picks cerebras first (it's first in the array) for getProviderForMetaModel
+    // Registry would pick groq first (it's first in the array) for getProviderForMetaModel
     // but pickProvider should exclude it because it has no vision models
     const registry: ProviderRegistry = {
-      getAll: () => [cerebras, gemini],
-      getEnabled: () => [cerebras, gemini],
-      getAvailable: async () => [cerebras, gemini],
+      getAll: () => [groq, gemini],
+      getEnabled: () => [groq, gemini],
+      getAvailable: async () => [groq, gemini],
       getById: () => undefined,
       getAllModels: () => [textOnlyModel, visionModel],
       getProviderForMetaModel: async (
         _meta: string,
         excluded: Set<string>,
       ): Promise<ProviderAdapter | undefined> => {
-        for (const p of [cerebras, gemini]) {
+        for (const p of [groq, gemini]) {
           if (excluded.has(p.id)) continue;
           if (await p.isAvailable()) return p;
         }
@@ -323,9 +330,9 @@ describe("GatewayRouter — meta-model vision routing", () => {
     const router = new GatewayRouter(registry);
     const { data } = await router.complete(visionRequest("free"));
 
-    // Gemini (vision-capable) must have been picked, not cerebras
+    // Gemini (vision-capable) must have been picked, not groq
     expect(gemini.callCount).toBe(1);
-    expect(cerebras.callCount).toBe(0);
+    expect(groq.callCount).toBe(0);
     expect(data.x_freellm_provider).toBe("gemini");
   });
 

@@ -100,8 +100,7 @@ beforeAll(async () => {
   process.env.FREELLM_IDENTIFIER_LIMIT = "1000/60000";
   for (const k of [
     "GEMINI_API_KEY",
-    "MISTRAL_API_KEY",
-    "CEREBRAS_API_KEY",
+    "MISTRAL_API_KEY",
     "NIM_API_KEY",
     "NVIDIA_NIM_API_KEY",
     "CLOUDFLARE_ACCOUNT_ID",

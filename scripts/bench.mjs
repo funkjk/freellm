@@ -80,8 +80,7 @@ function startGatewayAndMeasureBoot() {
       // Strip any real provider keys so only the fake upstream matters.
       GROQ_API_KEY: "",
       GEMINI_API_KEY: "",
-      MISTRAL_API_KEY: "",
-      CEREBRAS_API_KEY: "",
+      MISTRAL_API_KEY: "",
       NIM_API_KEY: "",
       // Quieten logs during the benchmark so we don't measure pino.
       LOG_LEVEL: "error",

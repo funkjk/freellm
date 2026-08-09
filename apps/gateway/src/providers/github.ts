@@ -38,6 +38,8 @@ export class GitHubModelsProvider extends BaseProvider {
   readonly id = "github";
   readonly name = "GitHub Models";
   override readonly supportsStreamUsage = true;
+  /** Free-tier RPM/RPD differ by model tier (low vs high). */
+  override readonly rateLimitScope = "model" as const;
 
   get baseUrl(): string {
     return process.env.GITHUB_MODELS_BASE_URL ?? "https://models.github.ai/inference";

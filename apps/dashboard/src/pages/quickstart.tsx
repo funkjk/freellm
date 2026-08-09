@@ -158,12 +158,12 @@ export default function Quickstart() {
               { id: "free", desc: "First available provider", note: "Best for reliability" },
               {
                 id: "free-fast",
-                desc: "Groq → Cerebras → Gemini → Mistral",
+                desc: "Groq → Cloudflare → Gemini → NIM",
                 note: "Optimized for speed",
               },
               {
                 id: "free-smart",
-                desc: "Gemini → Groq → Mistral → Cerebras",
+                desc: "Gemini → GitHub → NIM → Groq",
                 note: "Optimized for quality",
               },
               {

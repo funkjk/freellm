@@ -151,7 +151,7 @@ describe("chatCompletionRequestSchema", () => {
   it("accepts reasoning_effort at every allowed level", () => {
     for (const level of ["none", "low", "medium", "high"] as const) {
       ok({
-        model: "gemini/gemini-2.5-flash",
+        model: "gemini/gemini-3.6-flash",
         messages: [{ role: "user", content: "think" }],
         reasoning_effort: level,
       });

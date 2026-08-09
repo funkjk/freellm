@@ -33,13 +33,16 @@ class FakeProvider implements ProviderAdapter {
   readonly models: ModelObject[];
   readonly supportsStreamUsage = false;
   readonly supportsTools = true;
+  readonly rateLimitScope: "key" | "model" = "key";
   callCount = 0;
   lastRetryAfterSeconds: number | undefined = undefined;
+  lastModel: string | undefined = undefined;
   private statuses: number[];
   private body: unknown;
   private extraHeaders: Record<string, string>;
   private cbState: CircuitBreakerState = "closed";
   private rateLimited = false;
+  private limitedModels = new Set<string>();
   private statsObj: ProviderStats = {
     totalRequests: 0,
     successRequests: 0,
@@ -47,15 +50,17 @@ class FakeProvider implements ProviderAdapter {
     rateLimitedRequests: 0,
   };
 
-  constructor(opts: FakeOptions) {
+  constructor(opts: FakeOptions & { rateLimitScope?: "key" | "model" }) {
     this.id = opts.id;
     this.name = opts.id;
+    this.rateLimitScope = opts.rateLimitScope ?? "key";
     this.models = opts.models.map((m) => ({
       id: m,
       object: "model" as const,
       created: 0,
       owned_by: opts.id,
       provider: opts.id,
+      supportsVision: true,
     }));
     this.statuses = opts.statuses ?? [200];
     this.extraHeaders = opts.extraHeaders ?? {};
@@ -76,6 +81,13 @@ class FakeProvider implements ProviderAdapter {
     return false;
   }
   async isAvailable(): Promise<boolean> {
+    if (this.rateLimitScope === "model") {
+      return this.models.some((m) => !this.limitedModels.has(m.id));
+    }
+    return !this.rateLimited;
+  }
+  async isAvailableForModel(modelId: string): Promise<boolean> {
+    if (this.rateLimitScope === "model") return !this.limitedModels.has(modelId);
     return !this.rateLimited;
   }
   getStats(): ProviderStats {
@@ -85,24 +97,41 @@ class FakeProvider implements ProviderAdapter {
     return this.cbState;
   }
   async getKeysStatus(): Promise<KeyStatus[]> {
+    const limited =
+      this.rateLimitScope === "model" ? this.limitedModels.size >= this.models.length : this.rateLimited;
     return [
       {
         index: 0,
-        rateLimited: this.rateLimited,
+        rateLimited: limited,
         requestsInWindow: 0,
         maxRequests: 30,
-        retryAfterMs: this.rateLimited ? 5_000 : null,
+        retryAfterMs: limited ? 5_000 : null,
       },
     ];
   }
+  async getModelsStatus() {
+    if (this.rateLimitScope !== "model") return [];
+    return this.models.map((m) => ({
+      id: m.id,
+      rateLimited: this.limitedModels.has(m.id),
+      requestsInWindow: 0,
+      maxRequests: 30,
+      retryAfterMs: this.limitedModels.has(m.id) ? 5_000 : null,
+    }));
+  }
 
-  async complete(_request: ChatCompletionRequest): Promise<Response> {
+  async complete(request: ChatCompletionRequest): Promise<Response> {
+    this.lastModel = request.model;
     const idx = Math.min(this.callCount, this.statuses.length - 1);
     const status = this.statuses[idx] ?? 500;
     this.callCount++;
     this.statsObj.totalRequests++;
     if (status === 200) {
-      return new Response(JSON.stringify(this.body), {
+      const body =
+        typeof this.body === "object" && this.body !== null
+          ? { ...(this.body as object), model: request.model }
+          : this.body;
+      return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "content-type": "application/json", ...this.extraHeaders },
       });
@@ -118,8 +147,12 @@ class FakeProvider implements ProviderAdapter {
   }
   async onRateLimit(_response: Response, retryAfterSeconds?: number): Promise<void> {
     this.statsObj.rateLimitedRequests++;
-    this.rateLimited = true;
     this.lastRetryAfterSeconds = retryAfterSeconds;
+    if (this.rateLimitScope === "model" && this.lastModel) {
+      this.limitedModels.add(this.lastModel);
+    } else {
+      this.rateLimited = true;
+    }
   }
   async onError(): Promise<void> {
     this.statsObj.failedRequests++;
@@ -128,6 +161,7 @@ class FakeProvider implements ProviderAdapter {
   async resetCircuitBreaker(): Promise<void> {
     this.cbState = "closed";
     this.rateLimited = false;
+    this.limitedModels.clear();
   }
 }
 
@@ -447,5 +481,64 @@ describe("GatewayRouter.complete (strict mode)", () => {
     // Strict call must hit the provider again, not the cache.
     await router.complete(baseRequest("m"), { strict: true });
     expect(groq.callCount).toBe(2);
+  });
+});
+
+describe("GatewayRouter intra-provider model fallback", () => {
+  it("falls back to the next Gemini Flash sibling after a 429", async () => {
+    const gemini = new FakeProvider({
+      id: "gemini",
+      rateLimitScope: "model",
+      models: [
+        "gemini/gemini-flash-latest",
+        "gemini/gemini-3.6-flash",
+        "gemini/gemini-3.5-flash",
+      ],
+      statuses: [429, 200],
+    });
+    const router = new GatewayRouter(fakeRegistry([gemini]));
+
+    const { meta } = await router.complete(baseRequest("gemini/gemini-flash-latest"));
+    expect(gemini.callCount).toBe(2);
+    expect(meta.resolvedModel).toBe("gemini/gemini-3.6-flash");
+    expect(meta.reason).toBe("failover");
+    expect(meta.provider).toBe("gemini");
+  });
+
+  it("falls back to the next Gemini Flash sibling after a 404", async () => {
+    const gemini = new FakeProvider({
+      id: "gemini",
+      rateLimitScope: "model",
+      models: [
+        "gemini/gemini-flash-latest",
+        "gemini/gemini-3.6-flash",
+        "gemini/gemini-3.5-flash",
+      ],
+      statuses: [404, 200],
+    });
+    const router = new GatewayRouter(fakeRegistry([gemini]));
+
+    const { meta } = await router.complete(baseRequest("gemini/gemini-flash-latest"));
+    expect(gemini.callCount).toBe(2);
+    expect(meta.resolvedModel).toBe("gemini/gemini-3.6-flash");
+    expect(meta.reason).toBe("failover");
+  });
+
+  it("does not model-fallback for key-scoped providers", async () => {
+    const keyScoped = new FakeProvider({
+      id: "nim",
+      rateLimitScope: "key",
+      models: ["shared/a", "shared/b"],
+      statuses: [429],
+    });
+    const other = new FakeProvider({
+      id: "other",
+      models: ["shared/a"],
+    });
+    const router = new GatewayRouter(fakeRegistry([keyScoped, other]));
+
+    const { meta } = await router.complete(baseRequest("shared/a"));
+    expect(keyScoped.callCount).toBe(1);
+    expect(meta.provider).toBe("other");
   });
 });

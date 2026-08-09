@@ -2,7 +2,7 @@
 # FreeLLM Gateway Test Script
 # Usage: ./scripts/test-gateway.sh [base_url]
 
-BASE_URL="${1:-http://localhost:3000}"
+BASE_URL="${1:-http://localhost:5180}"
 PASS=0
 FAIL=0
 TOTAL=0

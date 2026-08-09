@@ -5,16 +5,19 @@ import {
   useUpdateProvider,
   useUpdateRoutingStrategy,
 } from "@/api/hooks";
+import { customFetch } from "@/api/custom-fetch";
+import type { ProviderStatus } from "@/api/schemas";
 import { ApiKeyGate } from "@/components/api-key-gate";
 import { BrowserTokensCard } from "@/components/browser-tokens-card";
 import { MetricsRow } from "@/components/metrics-row";
 import { ProviderCard } from "@/components/provider-card";
 import { RequestTable } from "@/components/request-table";
 import { RoutingToggle } from "@/components/routing-toggle";
+import { Button } from "@/components/ui/button";
 import { VirtualKeysPanel } from "@/components/virtual-keys-panel";
 import { isAuthError } from "@/lib/api-key";
-import { useQueryClient } from "@tanstack/react-query";
-import { Server } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, Server } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
@@ -34,15 +37,28 @@ export default function Dashboard() {
 
   const resetCircuitBreaker = useResetProviderCircuitBreaker({
     mutation: {
-      onSuccess: () => {
-        toast.success("Circuit breaker reset");
+      onSuccess: (data) => {
+        toast.success(`${data.name}: cooldowns & circuit cleared`);
         queryClient.invalidateQueries({ queryKey: getGetGatewayStatusQueryKey() });
       },
       onError: (err) =>
         toast.error(
-          isAuthError(err) ? "API key required or invalid" : "Failed to reset circuit breaker",
+          isAuthError(err) ? "API key required or invalid" : "Failed to reset provider state",
         ),
     },
+  });
+
+  const resetAll = useMutation({
+    mutationFn: async () =>
+      customFetch<{ reset: string[]; providers: ProviderStatus[] }>("/api/v1/status/reset", {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      toast.success(`Cleared state for ${data.reset.length} providers`);
+      queryClient.invalidateQueries({ queryKey: getGetGatewayStatusQueryKey() });
+    },
+    onError: (err) =>
+      toast.error(isAuthError(err) ? "Admin API key required" : "Failed to reset all providers"),
   });
 
   const updateRouting = useUpdateRoutingStrategy({
@@ -106,13 +122,34 @@ export default function Dashboard() {
             Real-time metrics and routing control.
           </p>
         </div>
-        <RoutingToggle
-          strategy={status.routingStrategy}
-          onToggle={(checked) =>
-            updateRouting.mutate({ data: { strategy: checked ? "round_robin" : "random" } })
-          }
-          disabled={updateRouting.isPending}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs font-mono rounded-lg"
+            disabled={resetAll.isPending}
+            title="Clear circuit breakers, rate-limit cooldowns, quota streaks, and windows for all providers"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Clear Redis/memory cooldowns, quota streaks, sliding windows, and circuit breakers for every provider?",
+                )
+              ) {
+                resetAll.mutate();
+              }
+            }}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${resetAll.isPending ? "animate-spin" : ""}`} />
+            Reset all state
+          </Button>
+          <RoutingToggle
+            strategy={status.routingStrategy}
+            onToggle={(checked) =>
+              updateRouting.mutate({ data: { strategy: checked ? "round_robin" : "random" } })
+            }
+            disabled={updateRouting.isPending}
+          />
+        </div>
       </div>
 
       <MetricsRow
@@ -134,7 +171,10 @@ export default function Dashboard() {
               key={provider.id}
               provider={provider}
               onReset={(id) => resetCircuitBreaker.mutate({ providerId: id })}
-              resetPending={resetCircuitBreaker.isPending}
+              resetPending={
+                resetCircuitBreaker.isPending &&
+                resetCircuitBreaker.variables?.providerId === provider.id
+              }
               onSetDisabled={(id, disabled) =>
                 updateProvider.mutate({ providerId: id, data: { disabled } })
               }
@@ -144,10 +184,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Trust row: virtual keys and browser token status side by side on
-          large screens, stacked on mobile. Virtual keys renders nothing
-          when no keys are loaded, so the browser-token card takes the
-          full width in that case via the grid's auto-fill behaviour. */}
       <div className="flex flex-col lg:flex-row gap-3 items-start">
         <VirtualKeysPanel />
         {status.browserTokens && <BrowserTokensCard info={status.browserTokens} />}

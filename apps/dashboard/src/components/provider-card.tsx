@@ -1,8 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import type { ModelRateStatus } from "@/api/schemas";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Clock, Coins, Key, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ChevronDown, Clock, Coins, Key, RefreshCw, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
 
 interface ProviderCardProps {
   provider: {
@@ -17,6 +19,8 @@ interface ProviderCardProps {
     lastUsedAt?: string | null;
     keyCount?: number;
     keysAvailable?: number;
+    rateLimitScope?: "key" | "model";
+    modelStatus?: ModelRateStatus[];
     usage?: {
       promptTokens: number;
       completionTokens: number;
@@ -102,6 +106,22 @@ function formatCompact(n: number): string {
   return `${(n / 1_000_000_000).toFixed(2)}B`;
 }
 
+function formatRetryAfter(ms: number | null | undefined): string {
+  if (ms == null || ms <= 0) return "";
+  const sec = Math.ceil(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.ceil(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem > 0 ? `${hr}h ${rem}m` : `${hr}h`;
+}
+
+function shortModelId(fullId: string, providerId: string): string {
+  const prefix = `${providerId}/`;
+  return fullId.startsWith(prefix) ? fullId.slice(prefix.length) : fullId;
+}
+
 export function ProviderCard({
   provider,
   onReset,
@@ -109,14 +129,23 @@ export function ProviderCard({
   onSetDisabled,
   disablePending,
 }: ProviderCardProps) {
-  const showReset =
-    provider.circuitBreakerState === "open" || provider.circuitBreakerState === "half_open";
   const keyCount = provider.keyCount ?? 1;
   const keysAvailable = provider.keysAvailable ?? keyCount;
   const hasMultiKey = keyCount > 1;
   const usage = provider.usage;
   const hasTokens = usage && usage.totalTokens > 0;
   const manuallyDisabled = provider.disabled === true;
+  const modelStatus = provider.modelStatus ?? [];
+  const showModels = provider.rateLimitScope === "model" && modelStatus.length > 0;
+  const limitedCount = modelStatus.filter((m) => m.rateLimited).length;
+  const [modelsOpen, setModelsOpen] = useState(limitedCount > 0);
+
+  const sortedModels = useMemo(() => {
+    return [...modelStatus].sort((a, b) => {
+      if (a.rateLimited !== b.rateLimited) return a.rateLimited ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+  }, [modelStatus]);
 
   return (
     <div
@@ -141,6 +170,20 @@ export function ProviderCard({
           >
             {getStatusText(provider.circuitBreakerState, provider.enabled, manuallyDisabled)}
           </Badge>
+          {showModels && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "uppercase text-[10px] tracking-wider",
+                limitedCount > 0
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-white/[0.03] text-muted-foreground border-white/[0.06]",
+              )}
+              title={`${modelStatus.length - limitedCount}/${modelStatus.length} models available`}
+            >
+              {modelStatus.length - limitedCount}/{modelStatus.length} mdl
+            </Badge>
+          )}
           {hasMultiKey && (
             <Badge
               variant="outline"
@@ -194,6 +237,48 @@ export function ProviderCard({
         </div>
       </div>
 
+      {/* Per-model rate-limit state (model-scoped providers only) */}
+      {showModels && (
+        <div className="mb-4 rounded-lg border border-white/[0.04] bg-white/[0.015] overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setModelsOpen((o) => !o)}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-white/[0.02]"
+          >
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+              Models {limitedCount > 0 ? `· ${limitedCount} cooling` : "· all clear"}
+            </span>
+            <ChevronDown
+              className={cn(
+                "w-3.5 h-3.5 text-muted-foreground transition-transform",
+                modelsOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {modelsOpen && (
+            <ul className="border-t border-white/[0.04] divide-y divide-white/[0.03] max-h-48 overflow-y-auto">
+              {sortedModels.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 px-3 py-1.5 font-mono text-[11px]"
+                >
+                  <span className="truncate text-foreground/90" title={m.id}>
+                    {shortModelId(m.id, provider.id)}
+                  </span>
+                  {m.rateLimited ? (
+                    <span className="shrink-0 text-amber-400/90">
+                      {formatRetryAfter(m.retryAfterMs) || "limited"}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-emerald-400/80">ok</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Tokens */}
       {hasTokens && usage && (
         <div className="p-3 rounded-lg border border-amber-500/10 bg-amber-500/[0.03] mb-4">
@@ -226,13 +311,14 @@ export function ProviderCard({
           {provider.lastUsedAt ? new Date(provider.lastUsedAt).toLocaleTimeString() : "Never"}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {showReset && (
+          {provider.enabled && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => onReset(provider.id)}
               disabled={resetPending}
-              className="h-7 text-xs rounded-lg border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:text-amber-400"
+              title="Clear circuit breaker, rate-limit cooldowns, quota streaks, and sliding windows"
+              className="h-7 text-xs rounded-lg border-white/[0.08] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
             >
               <RefreshCw className={cn("w-3 h-3 mr-1", resetPending && "animate-spin")} /> Reset
             </Button>

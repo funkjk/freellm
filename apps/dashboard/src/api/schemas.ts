@@ -66,6 +66,14 @@ export interface KeyStatus {
   retryAfterMs: number | null;
 }
 
+export interface ModelRateStatus {
+  id: string;
+  rateLimited: boolean;
+  requestsInWindow: number;
+  maxRequests: number;
+  retryAfterMs: number | null;
+}
+
 export interface TokenUsageTotals {
   promptTokens: number;
   completionTokens: number;
@@ -96,6 +104,8 @@ export interface ProviderStatus {
   keyCount: number;
   keysAvailable: number;
   keys: KeyStatus[];
+  rateLimitScope?: "key" | "model";
+  modelStatus?: ModelRateStatus[];
   usage: TokenUsageTotals;
   privacy?: ProviderPrivacy;
 }

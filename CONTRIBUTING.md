@@ -23,7 +23,7 @@ cp .env.example .env   # add at least one provider API key
 pnpm dev
 ```
 
-API server runs on `http://localhost:3000`. Dashboard on `http://localhost:5173`. Website on `http://localhost:4321` (run `cd apps/web && pnpm dev` separately).
+API server runs on `http://localhost:5180`. Dashboard on `http://localhost:5181`. Website on `http://localhost:5182` (run `cd apps/web && pnpm dev` separately).
 
 Smoke test the gateway:
 

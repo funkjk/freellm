@@ -10,7 +10,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
+  const PORT = Number.parseInt(process.env.PORT ?? "5180", 10);
   const server = app.listen(PORT, "0.0.0.0", () => {
     logger.info({ port: PORT }, "FreeLLM gateway listening");
   });

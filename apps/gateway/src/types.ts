@@ -171,6 +171,15 @@ export interface KeyStatus {
   retryAfterMs: number | null;
 }
 
+/** Per-model cooldown snapshot for providers with `rateLimitScope: "model"`. */
+export interface ModelRateStatus {
+  id: string;
+  rateLimited: boolean;
+  requestsInWindow: number;
+  maxRequests: number;
+  retryAfterMs: number | null;
+}
+
 export interface ProviderPrivacyInfo {
   /** "no-training" | "free-tier-trains" | "configurable" | "local" */
   policy: string;
@@ -198,6 +207,10 @@ export interface ProviderStatusInfo {
   keyCount: number;
   keysAvailable: number;
   keys: KeyStatus[];
+  /** `model` when upstream quotas are per model; omitted/`key` otherwise. */
+  rateLimitScope?: "key" | "model";
+  /** Present when `rateLimitScope` is `model` — one row per catalog model. */
+  modelStatus?: ModelRateStatus[];
   usage: TokenUsageTotals;
   /** Training policy + source, surfaced from PROVIDER_PRIVACY. */
   privacy?: ProviderPrivacyInfo;

@@ -58,8 +58,8 @@ docker pull ghcr.io/devansh-365/freellm:latest
 docker image inspect ghcr.io/devansh-365/freellm:latest
 
 # Run it and hit the healthcheck
-docker run --rm -p 3000:3000 ghcr.io/devansh-365/freellm:latest &
-curl -s http://localhost:3000/healthz
+docker run --rm -p 5180:3000 ghcr.io/devansh-365/freellm:latest &
+curl -s http://localhost:5180/healthz
 # {"status":"ok"}
 ```
 

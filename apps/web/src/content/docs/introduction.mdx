@@ -1,15 +1,15 @@
 ---
 title: Introduction
-description: You shouldn't need a credit card to call an LLM. FreeLLM is an OpenAI-compatible gateway across 6 free providers.
+description: You shouldn't need a credit card to call an LLM. FreeLLM is an OpenAI-compatible gateway across 7 free providers.
 ---
 
-**FreeLLM** is an OpenAI-compatible gateway that stitches **6 free LLM providers** (Groq, Gemini, Mistral, Cerebras, NVIDIA NIM, and Ollama) into a single endpoint. Automatic failover, multi-key rotation, response caching, and a real-time dashboard. Zero dollars.
+**FreeLLM** is an OpenAI-compatible gateway that stitches **7 free LLM providers** (Groq, Gemini, Mistral, NVIDIA NIM, Cloudflare Workers AI, GitHub Models, and Ollama) into a single endpoint. Automatic failover, multi-key rotation, response caching, and a real-time dashboard. Zero dollars.
 
-![FreeLLM dashboard showing live request tracking across 6 LLM providers](/dashboard-demo.gif)
+![FreeLLM dashboard showing live request tracking across 7 LLM providers](/dashboard-demo.gif)
 
 ## Why this exists
 
-Every major provider has a free tier. Groq, Gemini, Mistral, Cerebras, NVIDIA. All of them.
+Every major provider has a free tier. Groq, Gemini, Mistral, NVIDIA, Cloudflare, GitHub Models. All of them.
 
 But using them is painful. Each one ships its own SDK. Each one has its own rate limits. Each one goes down at the worst possible time. So you end up writing provider-switching logic, handling 429s, and babysitting API keys across five different dashboards.
 
@@ -18,7 +18,7 @@ I built FreeLLM because I was tired of paying OpenAI $20 to test a prompt I'd ru
 **One line replaces all of that:**
 
 ```python
-client = OpenAI(base_url="http://localhost:3000/v1", api_key="unused")
+client = OpenAI(base_url="http://localhost:5180/v1", api_key="unused")
 ```
 
 That's the entire migration.
@@ -26,7 +26,7 @@ That's the entire migration.
 ## What you get
 
 - **Drop-in OpenAI SDK.** Swap your base URL. Keep your code.
-- **Automatic failover.** Groq rate-limited? Routes to Gemini, then Mistral, then Cerebras.
+- **Automatic failover.** Groq rate-limited? Routes to Gemini, then Mistral, then NIM.
 - **Multi-key rotation.** Stack `GROQ_API_KEY=k1,k2,k3` to triple your free capacity.
 - **Response caching.** Identical prompts return in ~23ms with zero quota burn. 9× faster than the cold path.
 - **Token tracking.** Rolling 24h token counts per provider, so you always know how much of your free budget is left.

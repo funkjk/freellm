@@ -73,8 +73,7 @@ beforeAll(async () => {
   delete process.env.FREELLM_API_KEY;
   for (const k of [
     "GEMINI_API_KEY",
-    "MISTRAL_API_KEY",
-    "CEREBRAS_API_KEY",
+    "MISTRAL_API_KEY",
     "NIM_API_KEY",
     "NVIDIA_NIM_API_KEY",
     "CLOUDFLARE_ACCOUNT_ID",

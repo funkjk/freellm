@@ -65,7 +65,7 @@ const canonicalURL = "https://freellms.vercel.app/alternatives/groq/";
           <div class="feature-item">
             <span class="feature-label">Automatic failover</span>
             <span class="feature-desc">
-              When Groq returns a 429, the next request goes to Gemini, Mistral, Cerebras,
+              When Groq returns a 429, the next request goes to Gemini, Mistral, NIM,
               or whichever provider has capacity. Your app sees a successful response.
             </span>
           </div>
@@ -112,7 +112,7 @@ const canonicalURL = "https://freellms.vercel.app/alternatives/groq/";
               </tr>
               <tr>
                 <td>Providers</td>
-                <td class="freellm-col yes">8 (Groq, Gemini, Mistral, Cerebras, and more)</td>
+                <td class="freellm-col yes">7 (Groq, Gemini, Mistral, NIM, and more)</td>
                 <td>1</td>
               </tr>
               <tr>
@@ -141,7 +141,7 @@ const canonicalURL = "https://freellms.vercel.app/alternatives/groq/";
         </p>
         <ul>
           <li>Stack multiple Groq keys. FreeLLM rotates across them without any logic in your app.</li>
-          <li>When Groq is saturated, Gemini, Mistral, and Cerebras take over. Same model family, similar output quality.</li>
+          <li>When Groq is saturated, Gemini, Mistral, and NIM take over. Same model family, similar output quality.</li>
           <li>Response caching cuts repeat requests to around 23ms. Groq never sees them.</li>
         </ul>
 

@@ -191,7 +191,7 @@ The browser sets the `Origin` header automatically. You do not need to touch it.
 
 ## Common pitfalls
 
-- **The origin must match exactly.** Protocol, host, and port all have to line up. `https://yoursite.com` and `https://www.yoursite.com` are different origins. `http://localhost:3000` and `http://localhost:5173` are different origins. Mint separate tokens for each.
+- **The origin must match exactly.** Protocol, host, and port all have to line up. `https://yoursite.com` and `https://www.yoursite.com` are different origins. `http://localhost:5180` and `http://localhost:5181` are different origins. Mint separate tokens for each.
 - **`dangerouslyAllowBrowser: true` is required with the OpenAI SDK.** Without it the SDK throws at construction time. The name is the SDK authors' warning about shipping raw OpenAI keys to the browser. With FreeLLM browser tokens the risk surface is already bounded, but the flag is still required.
 - **Do not let the browser pick its own `origin`.** Your backend is the source of truth for which origin a token is bound to. Hardcode it or look it up from a server-side allowlist. Never forward a user-controlled string into the `origin` field of the mint request.
 - **CORS still has to allow the origin.** Browser tokens do not bypass CORS. The gateway's `ALLOWED_ORIGINS` environment variable must include every origin you mint tokens for. See the [Configuration reference](/reference/configuration/) for the exact format.

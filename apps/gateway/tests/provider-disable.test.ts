@@ -32,6 +32,7 @@ class FakeProvider implements ProviderAdapter {
   readonly models: ModelObject[];
   readonly supportsStreamUsage = false;
   readonly supportsTools = true;
+  readonly rateLimitScope = "key" as const;
   callCount = 0;
 
   constructor(id: string, modelIds: string[]) {
@@ -55,6 +56,9 @@ class FakeProvider implements ProviderAdapter {
   async isAvailable(): Promise<boolean> {
     return !(await this.isManuallyDisabled());
   }
+  async isAvailableForModel(_modelId: string): Promise<boolean> {
+    return this.isAvailable();
+  }
   getStats(): ProviderStats {
     return { totalRequests: 0, successRequests: 0, failedRequests: 0, rateLimitedRequests: 0 };
   }
@@ -65,6 +69,9 @@ class FakeProvider implements ProviderAdapter {
     return [
       { index: 0, rateLimited: false, requestsInWindow: 0, maxRequests: 30, retryAfterMs: null },
     ];
+  }
+  async getModelsStatus() {
+    return [];
   }
   async complete(req: ChatCompletionRequest): Promise<Response> {
     this.callCount++;

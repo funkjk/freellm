@@ -18,12 +18,16 @@ import { BaseProvider, parseApiKeys } from "./base.js";
  *    OpenAI-compat endpoint returns a 400 when both are present. Prefer
  *    `max_completion_tokens` and drop `max_tokens`.
  *
- * 3. **Catalog prefers floating `-latest` aliases.**
+ * 3. **Catalog prefers floating `-latest` aliases**, then pinned Gemini 3.x
+ *    Flash ids. The 2.5 family is removed (404 for many keys / approaching
+ *    shutdown). Quotas are per model, so `rateLimitScope` is `"model"` and
+ *    the router falls back across the Flash chain on 429/404.
  */
 export class GeminiProvider extends BaseProvider {
   readonly id = "gemini";
   readonly name = "Gemini";
   override readonly supportsStreamUsage = true;
+  override readonly rateLimitScope = "model" as const;
 
   get baseUrl(): string {
     return process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai";
@@ -39,6 +43,22 @@ export class GeminiProvider extends BaseProvider {
       supportsVision: true,
     },
     {
+      id: "gemini/gemini-3.6-flash",
+      object: "model",
+      created: 1700000000,
+      owned_by: "google",
+      provider: "gemini",
+      supportsVision: true,
+    },
+    {
+      id: "gemini/gemini-3.5-flash",
+      object: "model",
+      created: 1700000000,
+      owned_by: "google",
+      provider: "gemini",
+      supportsVision: true,
+    },
+    {
       id: "gemini/gemini-flash-lite-latest",
       object: "model",
       created: 1700000000,
@@ -47,23 +67,15 @@ export class GeminiProvider extends BaseProvider {
       supportsVision: true,
     },
     {
+      id: "gemini/gemini-3.5-flash-lite",
+      object: "model",
+      created: 1700000000,
+      owned_by: "google",
+      provider: "gemini",
+      supportsVision: true,
+    },
+    {
       id: "gemini/gemini-pro-latest",
-      object: "model",
-      created: 1700000000,
-      owned_by: "google",
-      provider: "gemini",
-      supportsVision: true,
-    },
-    {
-      id: "gemini/gemini-2.5-flash",
-      object: "model",
-      created: 1700000000,
-      owned_by: "google",
-      provider: "gemini",
-      supportsVision: true,
-    },
-    {
-      id: "gemini/gemini-2.5-pro",
       object: "model",
       created: 1700000000,
       owned_by: "google",

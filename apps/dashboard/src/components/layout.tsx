@@ -15,7 +15,7 @@ const navItems = [
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { data: health, isLoading } = useHealthCheck({
-    query: { refetchInterval: 10000, queryKey: getHealthCheckQueryKey() },
+    query: { refetchInterval: 60000, queryKey: getHealthCheckQueryKey() },
   });
 
   const gatewayDot = isLoading

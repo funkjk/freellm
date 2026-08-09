@@ -27,18 +27,17 @@ When the request comes in:
 
 ## Real-world math
 
-Stack 3 keys per provider across all 5 cloud providers:
+Stack 3 keys per provider across cloud providers:
 
 | Provider | Per-key RPM | Keys | Combined RPM |
 |----------|-------------|------|--------------|
 | Groq | 30 | 3 | 90 |
 | Gemini | 15 | 3 | 45 |
 | Mistral | 5 | 3 | 15 |
-| Cerebras | 30 | 3 | 90 |
 | NVIDIA NIM | 40 | 3 | 120 |
-| **Total** | | | **~360 req/min** |
+| **Total** | | | **~270+ req/min** |
 
-That's ~360 requests/minute of free inference, including frontier models like Llama 3.3 70B, Gemini 2.5 Pro, and DeepSeek R1. **All $0.**
+That's hundreds of requests/minute of free inference, including frontier models like Llama 3.3 70B, Gemini 2.5 Pro, and DeepSeek R1. **All $0.**
 
 ## Concurrency safety
 

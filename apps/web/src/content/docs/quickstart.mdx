@@ -32,11 +32,10 @@ Without Redis, each serverless isolate has its own memory — rate limits and ca
 Pull the prebuilt multi-arch image from GHCR (no clone needed):
 
 ```bash
-docker run -d -p 3000:3000 \
+docker run -d -p 5180:3000 \
   -e GROQ_API_KEY=gsk_... \
   -e GEMINI_API_KEY=AI... \
   -e MISTRAL_API_KEY=... \
-  -e CEREBRAS_API_KEY=... \
   -e NVIDIA_NIM_API_KEY=nvapi-... \
   --name freellm \
   ghcr.io/devansh-365/freellm:latest
@@ -61,7 +60,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-The API runs on `http://localhost:3000` and the dashboard on `http://localhost:5173`.
+The API runs on `http://localhost:5180` and the dashboard on `http://localhost:5181`.
 
 ## Get free API keys
 
@@ -72,7 +71,6 @@ Sign up for any combination of these (more keys = more capacity):
 | Groq | [console.groq.com](https://console.groq.com) |
 | Gemini | [aistudio.google.com](https://aistudio.google.com) |
 | Mistral | [console.mistral.ai](https://console.mistral.ai) |
-| Cerebras | [cloud.cerebras.ai](https://cloud.cerebras.ai) |
 | NVIDIA NIM | [build.nvidia.com](https://build.nvidia.com) |
 
 ## Make your first request
@@ -83,7 +81,7 @@ Once your gateway is running, point any OpenAI-compatible SDK at it:
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:3000/v1",
+    base_url="http://localhost:5180/v1",
     api_key="unused",
 )
 

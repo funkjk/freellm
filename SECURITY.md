@@ -79,7 +79,7 @@ FreeLLM is a self-hosted gateway that proxies requests to upstream LLM providers
 
 ### Out of Scope
 
-- Vulnerabilities in upstream LLM providers (Groq, Gemini, Mistral, Cerebras, NVIDIA NIM) — report those to the providers directly
+- Vulnerabilities in upstream LLM providers (Groq, Gemini, Mistral, NVIDIA NIM) — report those to the providers directly
 - Issues that require an attacker to already have valid `FREELLM_API_KEY` AND `FREELLM_ADMIN_KEY`
 - Social engineering attacks against operators
 - Physical access to the operator's host

@@ -55,11 +55,13 @@ export class OllamaProvider extends BaseProvider {
     await this.rateLimiter.recordRequest(picked.trackingId);
 
     const mapped = this.mapRequest(request);
+    const timeoutMs = this.fetchTimeoutMs();
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mapped),
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     // Attribute the response to the picked key for onSuccess/onRateLimit hooks.

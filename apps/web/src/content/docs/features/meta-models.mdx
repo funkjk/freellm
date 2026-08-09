@@ -8,9 +8,9 @@ Don't pick a provider. Pick a strategy. FreeLLM exposes meta-models that route a
 | Model | Strategy | Best For |
 |-------|----------|----------|
 | `free` | Round-robin across all available providers | Maximum uptime |
-| `free-fast` | Latency-priority: Groq → Cerebras → Gemini → NIM → Mistral | Real-time chatbots, low latency UIs |
-| `free-smart` | Capability-priority: Gemini → NIM → Groq → Mistral → Cerebras | Complex reasoning, longer context |
-| `free-tools` | Tool-capable providers only (excludes e.g. Cerebras): Gemini → GitHub → NIM → Groq → … | Agents and function / tool calling |
+| `free-fast` | Latency-priority: Groq → Cloudflare → Gemini → NIM → Mistral | Real-time chatbots, low latency UIs |
+| `free-smart` | Capability-priority: Gemini → GitHub → NIM → Groq → Mistral | Complex reasoning, longer context |
+| `free-tools` | Tool-capable providers only: Gemini → GitHub → NIM → Groq → … | Agents and function / tool calling |
 
 ## Direct provider targeting
 
@@ -18,9 +18,8 @@ You can also target a specific provider model directly:
 
 ```
 groq/llama-3.3-70b-versatile
-gemini/gemini-2.5-flash
+gemini/gemini-3.6-flash
 mistral/mistral-small-latest
-cerebras/llama3.1-8b
 nim/meta/llama-3.3-70b-instruct
 nim/nvidia/llama-3.1-nemotron-70b-instruct
 nim/deepseek-ai/deepseek-r1

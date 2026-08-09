@@ -8,6 +8,7 @@ import type { ProviderAdapter } from "../providers/types.js";
 import { getStores } from "../stores/create-stores.js";
 import type { ChatCompletionRequest, ChatCompletionResponse, RoutingStrategy } from "../types.js";
 import { type ResponseCache, hasImageContent } from "./cache.js";
+import { nextFallbackModel } from "./model-fallback.js";
 import { type PrivacyRequest, providerSatisfiesPrivacy } from "./privacy.js";
 import type { ProviderRegistry } from "./registry.js";
 import { parseRetryAfter } from "./retry-after.js";
@@ -29,7 +30,7 @@ export interface RouteOptions {
   privacy?: PrivacyRequest;
 }
 
-const ROUTE_TIMEOUT_MS = Number.parseInt(process.env.ROUTE_TIMEOUT_MS ?? "30000", 10);
+const ROUTE_TIMEOUT_MS = Number.parseInt(process.env.ROUTE_TIMEOUT_MS ?? "60000", 10);
 
 export class GatewayRouter {
   // Round-robin index for explicit (non-meta) model requests
@@ -71,8 +72,8 @@ export class GatewayRouter {
 
     // Exclude providers that can't handle tool-calling when the request
     // contains tools, or when the free-tools meta-model is requested.
-    // Without this Cerebras (and similar providers) return 400 and cause
-    // a retry cascade on every tool-use request.
+    // Without this, non-tool providers return 400 and cause a retry
+    // cascade on every tool-use request.
     if (requiresTools || modelId === "free-tools") {
       for (const p of this.registry.getAll()) {
         if (!p.supportsTools) effectiveExcluded.add(p.id);
@@ -220,6 +221,7 @@ export class GatewayRouter {
     }
 
     const excluded = new Set<string>();
+    const skippedModels = new Set<string>();
     const attempted: string[] = [];
     let failoverCount = 0;
     const deadline = Date.now() + ROUTE_TIMEOUT_MS;
@@ -249,7 +251,22 @@ export class GatewayRouter {
 
       if (!attempted.includes(provider.id)) attempted.push(provider.id);
 
-      const resolvedModel = this.resolveModelForProvider(request.model, provider, requiresVision);
+      const primaryModel = this.resolveModelForProvider(request.model, provider, requiresVision);
+      let resolvedModel = primaryModel;
+      if (provider.rateLimitScope === "model" && !strict) {
+        const withCapacity = await this.firstAvailableFallback(
+          provider,
+          primaryModel,
+          skippedModels,
+          requiresVision,
+        );
+        if (!withCapacity) {
+          excluded.add(provider.id);
+          continue;
+        }
+        resolvedModel = withCapacity;
+      }
+
       const mappedRequest = { ...request, model: resolvedModel };
 
       try {
@@ -263,17 +280,47 @@ export class GatewayRouter {
             response,
             retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : undefined,
           );
-          // Only exclude the provider if ALL its keys are now rate-limited.
-          // Otherwise the next iteration can pick a different key from the same provider.
-          if (!(await provider.isAvailable())) {
-            excluded.add(provider.id);
-          }
-          // Strict mode never falls back to a different provider.
+          // Strict mode never falls back to a different provider or model.
           if (strict) {
             throw new ProviderClientError(provider.id, response.status, response);
           }
+          // Per-model quotas: try the next sibling before excluding the provider.
+          if (provider.rateLimitScope === "model") {
+            skippedModels.add(resolvedModel);
+            const sibling = nextFallbackModel(
+              provider,
+              primaryModel,
+              skippedModels,
+              requiresVision,
+            );
+            if (sibling) {
+              failoverCount++;
+              continue;
+            }
+            excluded.add(provider.id);
+            failoverCount++;
+            continue;
+          }
+          // Key-scoped: only exclude when every key is hot; otherwise retry
+          // the same provider with a different key on the next loop.
+          if (!(await provider.isAvailable())) {
+            excluded.add(provider.id);
+          }
           failoverCount++;
           continue;
+        }
+
+        // Model-scoped providers: 404 often means "this model id is gone for
+        // this key" (e.g. Gemini 2.5 for new users). Skip to a sibling instead
+        // of failing the whole request as a hard client error.
+        if (response.status === 404 && provider.rateLimitScope === "model" && !strict) {
+          skippedModels.add(resolvedModel);
+          const sibling = nextFallbackModel(provider, primaryModel, skippedModels, requiresVision);
+          if (sibling) {
+            failoverCount++;
+            continue;
+          }
+          throw new ProviderClientError(provider.id, response.status, response);
         }
 
         if (NON_RETRIABLE_STATUSES.has(response.status)) {
@@ -315,6 +362,21 @@ export class GatewayRouter {
         if (strict) throw err;
         failoverCount++;
       }
+    }
+  }
+
+  private async firstAvailableFallback(
+    provider: ProviderAdapter,
+    primaryModel: string,
+    skipped: ReadonlySet<string>,
+    requiresVision: boolean,
+  ): Promise<string | undefined> {
+    const probe = new Set(skipped);
+    while (true) {
+      const candidate = nextFallbackModel(provider, primaryModel, probe, requiresVision);
+      if (!candidate) return undefined;
+      if (await provider.isAvailableForModel(candidate)) return candidate;
+      probe.add(candidate);
     }
   }
 

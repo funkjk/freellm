@@ -64,12 +64,6 @@ export const PROVIDER_PRIVACY: Record<string, ProviderPrivacy> = {
     last_verified: "2026-04-09",
     note: "Mistral La Plateforme lets workspace admins opt out of training data use.",
   },
-  cerebras: {
-    policy: "no-training",
-    source_url: "https://www.cerebras.net/privacy-policy/",
-    last_verified: "2026-04-09",
-    note: "Cerebras Inference terms exclude training on customer prompts.",
-  },
   nim: {
     policy: "no-training",
     source_url:

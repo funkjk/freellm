@@ -35,7 +35,7 @@ describe("assertStrictModeAllowed", () => {
 
   it("allows concrete models in strict mode", () => {
     expect(() => assertStrictModeAllowed("groq/llama-3.3-70b-versatile", true)).not.toThrow();
-    expect(() => assertStrictModeAllowed("gemini/gemini-2.5-flash", true)).not.toThrow();
+    expect(() => assertStrictModeAllowed("gemini/gemini-3.6-flash", true)).not.toThrow();
   });
 
   it("rejects every meta-model in strict mode", () => {

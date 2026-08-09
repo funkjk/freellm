@@ -21,7 +21,7 @@
           <pre><code>{`from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:3000/v1",
+    base_url="http://localhost:5180/v1",
     api_key="unused",
 )
 
@@ -37,7 +37,7 @@ print("Provider used:", response.x_freellm_provider)`}</code></pre>
           <pre><code>{`import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "http://localhost:3000/v1",
+  baseURL: "http://localhost:5180/v1",
   apiKey: "unused",
 });
 
@@ -49,7 +49,7 @@ const response = await client.chat.completions.create({
 console.log(response.choices[0].message.content);`}</code></pre>
         </div>
         <div class="tab-content" id="tab-curl" hidden>
-          <pre><code>{`curl http://localhost:3000/v1/chat/completions \\
+          <pre><code>{`curl http://localhost:5180/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "free",

@@ -17,8 +17,8 @@ export function createNormalizer(providerId: string): Normalizer {
       return createGeminiNormalizer();
     case "ollama":
       return createOllamaNormalizer();
-    // Groq, Cerebras, NIM, Mistral are known-compliant today. If any of
-    // them drifts, add a dedicated normalizer here without changing the
+    // Groq, NIM, Mistral are known-compliant today. If any of them
+    // drifts, add a dedicated normalizer here without changing the
     // callers.
     default:
       return createPassthroughNormalizer();
