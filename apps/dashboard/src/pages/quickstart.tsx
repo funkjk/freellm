@@ -73,7 +73,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="free",             # or "free-fast", "free-smart"
+    model="free",             # or "free-fast", "free-smart", "free-tools"
     messages=[
         {"role": "user", "content": "Hello! Who are you?"}
     ],
@@ -153,7 +153,7 @@ export default function Quickstart() {
             Use a meta-model that auto-selects the best available free provider, or pick a specific
             one.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
             {[
               { id: "free", desc: "First available provider", note: "Best for reliability" },
               {
@@ -165,6 +165,11 @@ export default function Quickstart() {
                 id: "free-smart",
                 desc: "Gemini → Groq → Mistral → Cerebras",
                 note: "Optimized for quality",
+              },
+              {
+                id: "free-tools",
+                desc: "Tool-capable providers only",
+                note: "For function / tool calling",
               },
             ].map((m) => (
               <div

@@ -69,9 +69,14 @@ export abstract class BaseProvider implements ProviderAdapter {
     return this.circuitBreaker.getState();
   }
 
+  async isManuallyDisabled(): Promise<boolean> {
+    return getStores().providerDisable.isDisabled(this.id);
+  }
+
   async isAvailable(): Promise<boolean> {
     this.ensureBound();
     if (!this.isEnabled()) return false;
+    if (await this.isManuallyDisabled()) return false;
     if (!(await this.circuitBreaker.isAllowed())) return false;
     const keys = this.getApiKeys();
     for (let i = 0; i < keys.length; i++) {

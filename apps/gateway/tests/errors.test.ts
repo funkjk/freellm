@@ -21,6 +21,7 @@ const ALL_CODES: ErrorCode[] = [
   "missing_api_key",
   "invalid_api_key",
   "admin_required",
+  "provider_disabled",
   "provider_not_found",
   "client_rate_limited",
   "identifier_rate_limited",
@@ -53,8 +54,9 @@ describe("httpStatusFor", () => {
     expect(httpStatusFor("invalid_api_key")).toBe(401);
   });
 
-  it("maps admin_required to 403", () => {
+  it("maps admin_required and provider_disabled to 403", () => {
     expect(httpStatusFor("admin_required")).toBe(403);
+    expect(httpStatusFor("provider_disabled")).toBe(403);
   });
 
   it("maps provider_not_found to 404", () => {

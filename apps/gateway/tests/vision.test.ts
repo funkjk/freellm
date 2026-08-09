@@ -74,6 +74,9 @@ class StubProvider implements ProviderAdapter {
   isEnabled() {
     return true;
   }
+  async isManuallyDisabled(): Promise<boolean> {
+    return false;
+  }
   async isAvailable(): Promise<boolean> {
     return true;
   }

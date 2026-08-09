@@ -8,10 +8,11 @@ import {
 import { getVirtualKeyStore } from "../../features/virtual-keys.js";
 import { adminAuth } from "../../middleware/admin-auth.js";
 import { validate } from "../../middleware/validate.js";
+import type { ProviderAdapter } from "../../providers/types.js";
 import { router as gatewayRouter, registry } from "../../routing/index.js";
-import { updateRoutingSchema } from "../../schemas.js";
-import type { RoutingStrategy } from "../../types.js";
-import type { BrowserTokensInfo } from "../../types.js";
+import { updateProviderSchema, updateRoutingSchema } from "../../schemas.js";
+import { getStores } from "../../stores/create-stores.js";
+import type { BrowserTokensInfo, ProviderStatusInfo, RoutingStrategy } from "../../types.js";
 
 function browserTokensInfo(): BrowserTokensInfo {
   return {
@@ -21,9 +22,34 @@ function browserTokensInfo(): BrowserTokensInfo {
   };
 }
 
+async function providerStatusPayload(provider: ProviderAdapter): Promise<ProviderStatusInfo> {
+  const stats = provider.getStats();
+  const keys = await provider.getKeysStatus();
+  const usage = await gatewayRouter.usageTracker.getTotals(provider.id);
+  return {
+    id: provider.id,
+    name: provider.name,
+    enabled: provider.isEnabled(),
+    disabled: await provider.isManuallyDisabled(),
+    circuitBreakerState: await provider.getCircuitBreakerState(),
+    totalRequests: stats.totalRequests,
+    successRequests: stats.successRequests,
+    failedRequests: stats.failedRequests,
+    rateLimitedRequests: stats.rateLimitedRequests,
+    lastError: stats.lastError ?? null,
+    lastUsedAt: stats.lastUsedAt ?? null,
+    models: provider.models.map((m) => m.id),
+    keyCount: keys.length,
+    keysAvailable: keys.filter((k) => !k.rateLimited).length,
+    keys,
+    usage,
+  };
+}
+
 const statusRouter: IRouter = Router();
 
 statusRouter.post("/providers/:providerId/reset", adminAuth);
+statusRouter.patch("/providers/:providerId", adminAuth);
 statusRouter.patch("/routing", adminAuth);
 statusRouter.get("/virtual-keys", adminAuth);
 
@@ -47,7 +73,7 @@ statusRouter.get("/", async (_req, res) => {
 });
 
 statusRouter.post("/providers/:providerId/reset", async (req, res, next: NextFunction) => {
-  const { providerId } = req.params;
+  const providerId = String(req.params.providerId);
   const provider = registry.getById(providerId);
 
   if (!provider) {
@@ -61,28 +87,31 @@ statusRouter.post("/providers/:providerId/reset", async (req, res, next: NextFun
   }
 
   await provider.resetCircuitBreaker();
-  const stats = provider.getStats();
-  const keys = await provider.getKeysStatus();
-  const usage = await gatewayRouter.usageTracker.getTotals(provider.id);
-
-  res.json({
-    id: provider.id,
-    name: provider.name,
-    enabled: provider.isEnabled(),
-    circuitBreakerState: await provider.getCircuitBreakerState(),
-    totalRequests: stats.totalRequests,
-    successRequests: stats.successRequests,
-    failedRequests: stats.failedRequests,
-    rateLimitedRequests: stats.rateLimitedRequests,
-    lastError: stats.lastError ?? null,
-    lastUsedAt: stats.lastUsedAt ?? null,
-    models: provider.models.map((m) => m.id),
-    keyCount: keys.length,
-    keysAvailable: keys.filter((k) => !k.rateLimited).length,
-    keys,
-    usage,
-  });
+  res.json(await providerStatusPayload(provider));
 });
+
+statusRouter.patch(
+  "/providers/:providerId",
+  validate(updateProviderSchema),
+  async (req, res, next: NextFunction) => {
+    const providerId = String(req.params.providerId);
+    const provider = registry.getById(providerId);
+
+    if (!provider) {
+      next(
+        freellmError({
+          code: "provider_not_found",
+          message: `Provider not found: ${providerId}`,
+        }),
+      );
+      return;
+    }
+
+    const { disabled } = req.body as { disabled: boolean };
+    await getStores().providerDisable.setDisabled(provider.id, disabled);
+    res.json(await providerStatusPayload(provider));
+  },
+);
 
 statusRouter.get("/virtual-keys", async (_req, res) => {
   const store = getVirtualKeyStore();

@@ -24,6 +24,7 @@ import type {
   HealthStatus,
   ModelsResponse,
   ProviderStatus,
+  UpdateProviderRequest,
   UpdateRoutingStrategyRequest,
 } from "./schemas";
 
@@ -437,6 +438,93 @@ export const useResetProviderCircuitBreaker = <
   TContext
 > => {
   return useMutation(getResetProviderCircuitBreakerMutationOptions(options));
+};
+
+/**
+ * Enable or disable a provider for routing (operator control)
+ * @summary Update provider
+ */
+export const getUpdateProviderUrl = (providerId: string) => {
+  return `/api/v1/status/providers/${providerId}`;
+};
+
+export const updateProvider = async (
+  providerId: string,
+  updateProviderRequest: UpdateProviderRequest,
+  options?: RequestInit,
+): Promise<ProviderStatus> => {
+  return customFetch<ProviderStatus>(getUpdateProviderUrl(providerId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateProviderRequest),
+  });
+};
+
+export const getUpdateProviderMutationOptions = <
+  TError = ErrorType<GatewayError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProvider>>,
+    TError,
+    { providerId: string; data: BodyType<UpdateProviderRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateProvider>>,
+  TError,
+  { providerId: string; data: BodyType<UpdateProviderRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateProvider"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateProvider>>,
+    { providerId: string; data: BodyType<UpdateProviderRequest> }
+  > = (props) => {
+    const { providerId, data } = props ?? {};
+    return updateProvider(providerId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateProviderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateProvider>>
+>;
+export type UpdateProviderMutationBody = BodyType<UpdateProviderRequest>;
+export type UpdateProviderMutationError = ErrorType<GatewayError>;
+
+/**
+ * @summary Update provider
+ */
+export const useUpdateProvider = <
+  TError = ErrorType<GatewayError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateProvider>>,
+    TError,
+    { providerId: string; data: BodyType<UpdateProviderRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateProvider>>,
+  TError,
+  { providerId: string; data: BodyType<UpdateProviderRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateProviderMutationOptions(options));
 };
 
 /**

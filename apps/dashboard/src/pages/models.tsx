@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { isAuthError } from "@/lib/api-key";
 import { cn } from "@/lib/utils";
-import { Check, Copy, Search } from "lucide-react";
+import { Check, Copy, MessageSquare, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -148,7 +149,7 @@ export default function Models() {
                   <div
                     key={model.id}
                     className={cn(
-                      "group rounded-xl border border-white/[0.04] bg-card hover:border-white/[0.08] transition-colors duration-150 cursor-pointer",
+                      "group rounded-xl border border-white/[0.04] bg-card hover:border-white/[0.08] transition-colors duration-150",
                       provider === "freellm" &&
                         "border-primary/10 bg-primary/[0.03] hover:border-primary/20",
                     )}
@@ -170,7 +171,18 @@ export default function Models() {
                           {model.object}
                         </p>
                       </div>
-                      <CopyButton value={model.id} />
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Link href={`/chat?model=${encodeURIComponent(model.id)}`}>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors duration-150 cursor-pointer"
+                            title="Chat with this model"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                        </Link>
+                        <CopyButton value={model.id} />
+                      </div>
                     </div>
                   </div>
                 ))}

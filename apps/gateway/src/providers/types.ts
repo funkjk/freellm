@@ -16,6 +16,8 @@ export interface ProviderAdapter {
   readonly supportsTools: boolean;
 
   isEnabled(): boolean;
+  /** Operator-disabled via Dashboard/admin API (keys may still be configured). */
+  isManuallyDisabled(): Promise<boolean>;
   getStats(): ProviderStats;
   getCircuitBreakerState(): Promise<CircuitBreakerState>;
   isAvailable(): Promise<boolean>;

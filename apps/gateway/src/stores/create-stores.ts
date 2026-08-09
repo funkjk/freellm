@@ -16,6 +16,8 @@ import type { RateLimiterStore } from "./rate-limiter/types.js";
 import { resolveStateBackend, type StateBackend } from "./types.js";
 import { MemoryUsageTrackerStore } from "./usage/memory.js";
 import type { UsageTrackerStore } from "./usage/types.js";
+import { MemoryProviderDisableStore } from "./provider-disable/memory.js";
+import type { ProviderDisableStore } from "./provider-disable/types.js";
 import { MemoryVirtualKeyCounterStore } from "./virtual-keys/memory.js";
 import type { VirtualKeyCounterStore } from "./virtual-keys/types.js";
 
@@ -28,6 +30,7 @@ export interface GatewayStores {
   cacheBackend: CacheBackend;
   usageTracker: UsageTrackerStore;
   vkCounters: VirtualKeyCounterStore;
+  providerDisable: ProviderDisableStore;
 }
 
 function createMemoryStores(): GatewayStores {
@@ -47,6 +50,7 @@ function createMemoryStores(): GatewayStores {
     cacheBackend: new MemoryCacheBackend(),
     usageTracker: new MemoryUsageTrackerStore(),
     vkCounters: new MemoryVirtualKeyCounterStore(),
+    providerDisable: new MemoryProviderDisableStore(),
   };
 }
 
@@ -71,6 +75,7 @@ export async function createStores(
   const { RedisCacheBackend } = await import("./cache/redis.js");
   const { RedisUsageTrackerStore } = await import("./usage/redis.js");
   const { RedisVirtualKeyCounterStore } = await import("./virtual-keys/redis.js");
+  const { RedisProviderDisableStore } = await import("./provider-disable/redis.js");
 
   const redis = createRedisClient();
   return {
@@ -91,6 +96,7 @@ export async function createStores(
     cacheBackend: new RedisCacheBackend(redis),
     usageTracker: new RedisUsageTrackerStore(redis),
     vkCounters: new RedisVirtualKeyCounterStore(redis),
+    providerDisable: new RedisProviderDisableStore(redis),
   };
 }
 

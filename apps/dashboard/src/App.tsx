@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import Chat from "@/pages/chat";
 import Dashboard from "@/pages/dashboard";
 import Models from "@/pages/models";
 import NotFound from "@/pages/not-found";
@@ -14,6 +15,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/chat" component={Chat} />
         <Route path="/models" component={Models} />
         <Route path="/quickstart" component={Quickstart} />
         <Route component={NotFound} />

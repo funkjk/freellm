@@ -1,4 +1,4 @@
-import { FAST_PRIORITY, SMART_PRIORITY } from "../config.js";
+import { FAST_PRIORITY, SMART_PRIORITY, TOOLS_PRIORITY } from "../config.js";
 import { CerebrasProvider } from "../providers/cerebras.js";
 import { CloudflareProvider } from "../providers/cloudflare.js";
 import { GeminiProvider } from "../providers/gemini.js";
@@ -82,6 +82,10 @@ export class ProviderRegistry {
       candidates = [...SMART_PRIORITY]
         .map((id) => available.find((a) => a.id === id))
         .filter((p): p is ProviderAdapter => p !== undefined);
+    } else if (metaModel === "free-tools") {
+      candidates = [...TOOLS_PRIORITY]
+        .map((id) => available.find((a) => a.id === id))
+        .filter((p): p is ProviderAdapter => p !== undefined && p.supportsTools);
     } else {
       candidates = available;
     }
@@ -109,6 +113,7 @@ export class ProviderRegistry {
         id: p.id,
         name: p.name,
         enabled: p.isEnabled(),
+        disabled: await p.isManuallyDisabled(),
         circuitBreakerState: await p.getCircuitBreakerState(),
         totalRequests: stats.totalRequests,
         successRequests: stats.successRequests,

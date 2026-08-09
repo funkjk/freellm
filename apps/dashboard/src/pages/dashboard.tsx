@@ -2,6 +2,7 @@ import {
   getGetGatewayStatusQueryKey,
   useGetGatewayStatus,
   useResetProviderCircuitBreaker,
+  useUpdateProvider,
   useUpdateRoutingStrategy,
 } from "@/api/hooks";
 import { ApiKeyGate } from "@/components/api-key-gate";
@@ -55,6 +56,19 @@ export default function Dashboard() {
     },
   });
 
+  const updateProvider = useUpdateProvider({
+    mutation: {
+      onSuccess: (data) => {
+        toast.success(data.disabled ? `${data.name} disabled` : `${data.name} enabled`);
+        queryClient.invalidateQueries({ queryKey: getGetGatewayStatusQueryKey() });
+      },
+      onError: (err) =>
+        toast.error(
+          isAuthError(err) ? "Admin API key required" : "Failed to update provider",
+        ),
+    },
+  });
+
   if (isAuthError(error)) {
     return <ApiKeyGate />;
   }
@@ -72,7 +86,7 @@ export default function Dashboard() {
     );
   }
 
-  if (isError && !status) {
+  if (isError || !status) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6">
         <h2 className="font-mono font-semibold">Failed to load gateway status</h2>
@@ -93,7 +107,7 @@ export default function Dashboard() {
           </p>
         </div>
         <RoutingToggle
-          strategy={status?.routingStrategy}
+          strategy={status.routingStrategy}
           onToggle={(checked) =>
             updateRouting.mutate({ data: { strategy: checked ? "round_robin" : "random" } })
           }
@@ -102,12 +116,12 @@ export default function Dashboard() {
       </div>
 
       <MetricsRow
-        total={status?.totalRequests ?? 0}
-        success={status?.successRequests ?? 0}
-        failed={status?.failedRequests ?? 0}
-        tokens={status?.usage?.totalTokens ?? 0}
-        cacheHits={status?.cache?.hits ?? 0}
-        cacheHitRate={status?.cache?.hitRate ?? 0}
+        total={status.totalRequests ?? 0}
+        success={status.successRequests ?? 0}
+        failed={status.failedRequests ?? 0}
+        tokens={status.usage?.totalTokens ?? 0}
+        cacheHits={status.cache?.hits ?? 0}
+        cacheHitRate={status.cache?.hitRate ?? 0}
       />
 
       <div>
@@ -115,12 +129,16 @@ export default function Dashboard() {
           <Server className="w-4 h-4 text-muted-foreground" /> Providers
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {status?.providers.map((provider) => (
+          {(status.providers ?? []).map((provider) => (
             <ProviderCard
               key={provider.id}
               provider={provider}
               onReset={(id) => resetCircuitBreaker.mutate({ providerId: id })}
               resetPending={resetCircuitBreaker.isPending}
+              onSetDisabled={(id, disabled) =>
+                updateProvider.mutate({ providerId: id, data: { disabled } })
+              }
+              disablePending={updateProvider.isPending}
             />
           ))}
         </div>
@@ -132,10 +150,10 @@ export default function Dashboard() {
           full width in that case via the grid's auto-fill behaviour. */}
       <div className="flex flex-col lg:flex-row gap-3 items-start">
         <VirtualKeysPanel />
-        {status?.browserTokens && <BrowserTokensCard info={status.browserTokens} />}
+        {status.browserTokens && <BrowserTokensCard info={status.browserTokens} />}
       </div>
 
-      <RequestTable requests={status?.recentRequests ?? []} />
+      <RequestTable requests={status.recentRequests ?? []} />
     </div>
   );
 }

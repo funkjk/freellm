@@ -22,8 +22,22 @@ export const SMART_PRIORITY = [
   "ollama",
 ] as const;
 
+/**
+ * Provider IDs preferred for tool-calling workloads.
+ * Ordered by capability; non-tool providers (e.g. Cerebras) are omitted.
+ */
+export const TOOLS_PRIORITY = [
+  "gemini",
+  "github",
+  "nim",
+  "groq",
+  "cloudflare",
+  "mistral",
+  "ollama",
+] as const;
+
 /** The set of meta-model names that trigger multi-provider routing. */
-export const META_MODELS = new Set(["free", "free-fast", "free-smart"]);
+export const META_MODELS = new Set(["free", "free-fast", "free-smart", "free-tools"]);
 
 /** Default concrete model to use per provider when a meta-model is requested. */
 export const DEFAULT_MODELS: Record<string, string> = {
@@ -58,6 +72,13 @@ export const META_MODEL_ENTRIES = [
   },
   {
     id: "free-smart",
+    object: "model" as const,
+    created: 1700000000,
+    owned_by: "freellm",
+    provider: "freellm",
+  },
+  {
+    id: "free-tools",
     object: "model" as const,
     created: 1700000000,
     owned_by: "freellm",

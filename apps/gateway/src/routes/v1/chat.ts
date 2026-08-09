@@ -173,6 +173,20 @@ async function handleStreamingRequest(
     setRouteHeaders(res, meta);
     res.flushHeaders();
 
+    // Emit route metadata as the first SSE event so browser clients that
+    // cannot read custom response headers (or only see them after the
+    // stream ends) still learn which provider/model was selected.
+    res.write(
+      `data: ${JSON.stringify({
+        object: "freellm.route",
+        provider: provider.id,
+        model: resolvedModel,
+        requested_model: body.model,
+        reason: meta.reason,
+        cached: meta.cached,
+      })}\n\n`,
+    );
+
     if (!response.body) {
       gatewayRouter.requestLog.add({
         requestedModel: body.model,

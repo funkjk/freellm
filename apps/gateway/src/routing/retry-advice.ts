@@ -1,4 +1,4 @@
-import { FAST_PRIORITY, SMART_PRIORITY } from "../config.js";
+import { FAST_PRIORITY, SMART_PRIORITY, TOOLS_PRIORITY } from "../config.js";
 import type { ProviderStatusInfo } from "../types.js";
 
 export interface ProviderRetryHint {
@@ -105,8 +105,10 @@ export function buildRetryAdvice(
   const suggestions: ModelSuggestion[] = [];
   const fast = suggestMetaModel("free-fast", FAST_PRIORITY, byId);
   const smart = suggestMetaModel("free-smart", SMART_PRIORITY, byId);
+  const tools = suggestMetaModel("free-tools", TOOLS_PRIORITY, byId);
   if (fast) suggestions.push(fast);
   if (smart) suggestions.push(smart);
+  if (tools) suggestions.push(tools);
 
   return {
     retry_after_ms: earliestRetryMs(enabled),

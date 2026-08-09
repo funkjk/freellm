@@ -53,12 +53,12 @@ The request goes to the fastest available provider. If that one is rate-limited 
 
 - **Drop-in OpenAI SDK.** Swap your base URL. Keep your code.
 - **Automatic failover.** Groq rate-limited? Routes to Gemini, then Mistral, then Cerebras.
-- **Three meta-models.** `free-fast` for speed, `free-smart` for reasoning, `free` for max availability.
+- **Meta-models.** `free-fast` for speed, `free-smart` for reasoning, `free-tools` for tool calling, `free` for max availability.
 - **Multi-key rotation.** Stack keys per provider for 3-4× the free RPM.
 - **Response caching.** Identical prompts return in ~23ms with zero quota burn.
 - **Token tracking.** Rolling 24h budget per provider, surfaced in the dashboard.
 - **Circuit breakers.** Failing providers get sidelined and tested for recovery.
-- **Real-time dashboard.** Provider health, request log, latency, cache hit rate.
+- **Real-time dashboard.** Provider health, chat playground, request log, latency, cache hit rate.
 - **Transparent routing.** Every response tells you which provider answered, and why.
 - **Strict mode.** Opt in and refuse silent provider substitution.
 - **Privacy routing.** Skip providers that train on free-tier prompts.
@@ -148,6 +148,7 @@ Don't pick a provider. Pick a strategy.
 | `free` | Rotates across all available providers | You want max uptime |
 | `free-fast` | Lowest-latency provider first (Groq, Cerebras, Gemini, NIM) | You're building a chatbot or real-time UI |
 | `free-smart` | Most capable provider first (Gemini, NIM, Groq, Mistral) | You need stronger reasoning or longer context |
+| `free-tools` | Tool-capable providers only (skips e.g. Cerebras) | Agents / function calling |
 
 Need a specific model? Target it directly: `groq/llama-3.3-70b-versatile`, `gemini/gemini-flash-latest`, `nim/deepseek-ai/deepseek-r1`.
 

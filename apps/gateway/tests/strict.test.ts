@@ -39,7 +39,7 @@ describe("assertStrictModeAllowed", () => {
   });
 
   it("rejects every meta-model in strict mode", () => {
-    for (const m of ["free", "free-fast", "free-smart"]) {
+    for (const m of ["free", "free-fast", "free-smart", "free-tools"]) {
       expect(() => assertStrictModeAllowed(m, true)).toThrow(StrictModeError);
     }
   });

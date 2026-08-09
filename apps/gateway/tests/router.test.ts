@@ -72,6 +72,9 @@ class FakeProvider implements ProviderAdapter {
   isEnabled(): boolean {
     return true;
   }
+  async isManuallyDisabled(): Promise<boolean> {
+    return false;
+  }
   async isAvailable(): Promise<boolean> {
     return !this.rateLimited;
   }
@@ -159,6 +162,7 @@ function fakeRegistry(providers: FakeProvider[]): ProviderRegistry {
             id: p.id,
             name: p.name,
             enabled: p.isEnabled(),
+            disabled: await p.isManuallyDisabled(),
             circuitBreakerState: await p.getCircuitBreakerState(),
             totalRequests: p.getStats().totalRequests,
             successRequests: p.getStats().successRequests,

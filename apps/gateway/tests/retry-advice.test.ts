@@ -141,7 +141,7 @@ describe("buildRetryAdvice", () => {
     });
   });
 
-  it("emits free-fast and free-smart suggestions when meta groups are non-empty", () => {
+  it("emits free-fast, free-smart, and free-tools suggestions when meta groups are non-empty", () => {
     const ps = [
       mkProvider("groq", { keys: [{ retryAfterMs: 5_000, rateLimited: true }] }),
       mkProvider("gemini", { keys: [{ retryAfterMs: 2_000, rateLimited: true }] }),
@@ -150,6 +150,7 @@ describe("buildRetryAdvice", () => {
     const ids = advice.suggestions.map((s) => s.model);
     expect(ids).toContain("free-fast");
     expect(ids).toContain("free-smart");
+    expect(ids).toContain("free-tools");
   });
 
   it("skips disabled providers", () => {

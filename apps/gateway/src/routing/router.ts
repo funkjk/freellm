@@ -5,6 +5,7 @@ import { ObservabilityStore } from "../observability/index.js";
 import type { RequestLog } from "../observability/request-log.js";
 import type { UsageTracker } from "../observability/usage-tracker.js";
 import type { ProviderAdapter } from "../providers/types.js";
+import { getStores } from "../stores/create-stores.js";
 import type { ChatCompletionRequest, ChatCompletionResponse, RoutingStrategy } from "../types.js";
 import { type ResponseCache, hasImageContent } from "./cache.js";
 import { type PrivacyRequest, providerSatisfiesPrivacy } from "./privacy.js";
@@ -69,9 +70,10 @@ export class GatewayRouter {
     }
 
     // Exclude providers that can't handle tool-calling when the request
-    // contains tools. Without this Cerebras (and similar providers) return
-    // 400 and cause a retry cascade on every tool-use request.
-    if (requiresTools) {
+    // contains tools, or when the free-tools meta-model is requested.
+    // Without this Cerebras (and similar providers) return 400 and cause
+    // a retry cascade on every tool-use request.
+    if (requiresTools || modelId === "free-tools") {
       for (const p of this.registry.getAll()) {
         if (!p.supportsTools) effectiveExcluded.add(p.id);
       }
@@ -161,8 +163,9 @@ export class GatewayRouter {
     assertStrictModeAllowed(request.model, strict);
 
     // Fail fast when a specific non-vision model is requested with image content.
-    // Meta-models (free, free-smart, free-fast) handle vision by routing to a
-    // vision-capable provider automatically — only direct model requests fail here.
+    // Meta-models (free, free-smart, free-fast, free-tools) handle vision by
+    // routing to a vision-capable provider automatically — only direct model
+    // requests fail here.
     if (requiresVision && !META_MODELS.has(request.model)) {
       const modelObj = this.registry
         .getAll()
@@ -171,9 +174,29 @@ export class GatewayRouter {
       if (modelObj && !modelObj.supportsVision) {
         throw freellmError({
           code: "model_not_supported",
-          message: `Model "${request.model}" does not support vision/image inputs. Use a vision-capable model or a meta-model (free, free-smart, free-fast).`,
+          message: `Model "${request.model}" does not support vision/image inputs. Use a vision-capable model or a meta-model (free, free-smart, free-fast, free-tools).`,
           requested_model: request.model,
         });
+      }
+    }
+
+    // Fail fast when a concrete model is only served by operator-disabled
+    // providers. Meta-models simply skip those providers during selection.
+    if (!META_MODELS.has(request.model)) {
+      const owners = this.registry
+        .getAll()
+        .filter((p) => p.isEnabled() && p.models.some((m) => m.id === request.model));
+      if (owners.length > 0) {
+        const disableStore = getStores().providerDisable;
+        const flags = await Promise.all(owners.map((p) => disableStore.isDisabled(p.id)));
+        if (flags.every(Boolean)) {
+          throw freellmError({
+            code: "provider_disabled",
+            message: `Provider(s) for model "${request.model}" are disabled by an operator.`,
+            requested_model: request.model,
+            provider: owners[0]?.id,
+          });
+        }
       }
     }
 

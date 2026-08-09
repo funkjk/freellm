@@ -1,12 +1,13 @@
 import { getHealthCheckQueryKey, useHealthCheck } from "@/api/hooks";
 import { ApiKeyControl } from "@/components/api-key-control";
 import { cn } from "@/lib/utils";
-import { Activity, Box, Terminal } from "lucide-react";
+import { Activity, Box, MessageSquare, Terminal } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { FreeLLMLogo } from "./logo";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Activity },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/models", label: "Models", icon: Box },
   { href: "/quickstart", label: "Quickstart", icon: Terminal },
 ];

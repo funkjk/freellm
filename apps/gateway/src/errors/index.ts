@@ -34,6 +34,7 @@ const CODE_TO_STATUS: Record<ErrorCode, number> = {
   invalid_api_key: 401,
   // 403
   admin_required: 403,
+  provider_disabled: 403,
   // 404
   provider_not_found: 404,
   // 429
@@ -63,6 +64,7 @@ const CODE_TO_TYPE: Record<ErrorCode, ErrorType> = {
   invalid_api_key: "authentication_error",
   // 403 → permission_error
   admin_required: "permission_error",
+  provider_disabled: "permission_error",
   // 404 → not_found_error
   provider_not_found: "not_found_error",
   // 429 → rate_limit_error

@@ -183,7 +183,10 @@ export interface ProviderPrivacyInfo {
 export interface ProviderStatusInfo {
   id: string;
   name: string;
+  /** True when at least one API key is configured for this provider. */
   enabled: boolean;
+  /** True when an operator has manually disabled routing to this provider. */
+  disabled: boolean;
   circuitBreakerState: CircuitBreakerState;
   totalRequests: number;
   successRequests: number;

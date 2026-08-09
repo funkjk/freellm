@@ -3,13 +3,14 @@ title: Meta-Models
 description: Pick a routing strategy instead of a specific provider.
 ---
 
-Don't pick a provider. Pick a strategy. FreeLLM exposes three meta-models that route across providers based on what you care about.
+Don't pick a provider. Pick a strategy. FreeLLM exposes meta-models that route across providers based on what you care about.
 
 | Model | Strategy | Best For |
 |-------|----------|----------|
 | `free` | Round-robin across all available providers | Maximum uptime |
 | `free-fast` | Latency-priority: Groq → Cerebras → Gemini → NIM → Mistral | Real-time chatbots, low latency UIs |
 | `free-smart` | Capability-priority: Gemini → NIM → Groq → Mistral → Cerebras | Complex reasoning, longer context |
+| `free-tools` | Tool-capable providers only (excludes e.g. Cerebras): Gemini → GitHub → NIM → Groq → … | Agents and function / tool calling |
 
 ## Direct provider targeting
 

@@ -90,3 +90,7 @@ export const chatCompletionRequestSchema = z
 export const updateRoutingSchema = z.object({
   strategy: z.enum(["round_robin", "random"]),
 });
+
+export const updateProviderSchema = z.object({
+  disabled: z.boolean(),
+});

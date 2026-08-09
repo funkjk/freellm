@@ -34,6 +34,7 @@ export type ErrorCode =
   | "invalid_api_key"
   // 403 permission_error
   | "admin_required"
+  | "provider_disabled"
   // 404 not_found_error
   | "provider_not_found"
   // 429 rate_limit_error

@@ -83,6 +83,8 @@ export interface ProviderStatus {
   id: string;
   name: string;
   enabled: boolean;
+  /** Operator-disabled via Dashboard (keys may still be configured). */
+  disabled?: boolean;
   circuitBreakerState: "closed" | "open" | "half_open";
   totalRequests: number;
   successRequests: number;
@@ -165,6 +167,10 @@ export interface GatewayStatus {
 
 export interface UpdateRoutingStrategyRequest {
   strategy: "round_robin" | "random";
+}
+
+export interface UpdateProviderRequest {
+  disabled: boolean;
 }
 
 export interface GatewayError {

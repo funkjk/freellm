@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Clock, Coins, Key, RefreshCw, ShieldCheck } from "lucide-react";
 
@@ -8,6 +9,7 @@ interface ProviderCardProps {
     id: string;
     name: string;
     enabled: boolean;
+    disabled?: boolean;
     circuitBreakerState: string;
     successRequests: number;
     failedRequests: number;
@@ -29,6 +31,8 @@ interface ProviderCardProps {
   };
   onReset: (providerId: string) => void;
   resetPending: boolean;
+  onSetDisabled: (providerId: string, disabled: boolean) => void;
+  disablePending: boolean;
 }
 
 function getPrivacyStyle(policy: string) {
@@ -61,8 +65,9 @@ function getPrivacyLabel(policy: string) {
   }
 }
 
-function getStatusColor(state: string, enabled: boolean) {
+function getStatusColor(state: string, enabled: boolean, manuallyDisabled: boolean) {
   if (!enabled) return "bg-muted text-muted-foreground border-muted";
+  if (manuallyDisabled) return "bg-rose-500/10 text-rose-400 border-rose-500/20";
   switch (state) {
     case "closed":
       return "bg-primary/10 text-primary border-primary/15";
@@ -75,8 +80,9 @@ function getStatusColor(state: string, enabled: boolean) {
   }
 }
 
-function getStatusText(state: string, enabled: boolean) {
-  if (!enabled) return "Disabled";
+function getStatusText(state: string, enabled: boolean, manuallyDisabled: boolean) {
+  if (!enabled) return "No keys";
+  if (manuallyDisabled) return "Disabled";
   switch (state) {
     case "closed":
       return "Healthy";
@@ -96,7 +102,13 @@ function formatCompact(n: number): string {
   return `${(n / 1_000_000_000).toFixed(2)}B`;
 }
 
-export function ProviderCard({ provider, onReset, resetPending }: ProviderCardProps) {
+export function ProviderCard({
+  provider,
+  onReset,
+  resetPending,
+  onSetDisabled,
+  disablePending,
+}: ProviderCardProps) {
   const showReset =
     provider.circuitBreakerState === "open" || provider.circuitBreakerState === "half_open";
   const keyCount = provider.keyCount ?? 1;
@@ -104,12 +116,13 @@ export function ProviderCard({ provider, onReset, resetPending }: ProviderCardPr
   const hasMultiKey = keyCount > 1;
   const usage = provider.usage;
   const hasTokens = usage && usage.totalTokens > 0;
+  const manuallyDisabled = provider.disabled === true;
 
   return (
     <div
       className={cn(
         "rounded-xl border border-white/[0.04] bg-card p-5 transition-all duration-200 hover:border-white/[0.08]",
-        !provider.enabled && "opacity-50",
+        (!provider.enabled || manuallyDisabled) && "opacity-50",
       )}
     >
       {/* Header */}
@@ -123,10 +136,10 @@ export function ProviderCard({ provider, onReset, resetPending }: ProviderCardPr
             variant="outline"
             className={cn(
               "uppercase text-[10px] tracking-wider",
-              getStatusColor(provider.circuitBreakerState, provider.enabled),
+              getStatusColor(provider.circuitBreakerState, provider.enabled, manuallyDisabled),
             )}
           >
-            {getStatusText(provider.circuitBreakerState, provider.enabled)}
+            {getStatusText(provider.circuitBreakerState, provider.enabled, manuallyDisabled)}
           </Badge>
           {hasMultiKey && (
             <Badge
@@ -207,22 +220,44 @@ export function ProviderCard({ provider, onReset, resetPending }: ProviderCardPr
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
-        <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-          <Clock className="w-3 h-3" />
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.04]">
+        <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 min-w-0">
+          <Clock className="w-3 h-3 shrink-0" />
           {provider.lastUsedAt ? new Date(provider.lastUsedAt).toLocaleTimeString() : "Never"}
         </div>
-        {showReset && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onReset(provider.id)}
-            disabled={resetPending}
-            className="h-7 text-xs rounded-lg border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:text-amber-400"
+        <div className="flex items-center gap-2 shrink-0">
+          {showReset && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onReset(provider.id)}
+              disabled={resetPending}
+              className="h-7 text-xs rounded-lg border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:text-amber-400"
+            >
+              <RefreshCw className={cn("w-3 h-3 mr-1", resetPending && "animate-spin")} /> Reset
+            </Button>
+          )}
+          <label
+            className={cn(
+              "flex items-center gap-2 text-[11px] font-mono",
+              provider.enabled ? "text-muted-foreground" : "text-muted-foreground/50",
+            )}
+            title={
+              provider.enabled
+                ? manuallyDisabled
+                  ? "Enable routing to this provider"
+                  : "Disable routing to this provider"
+                : "Configure API keys before enabling"
+            }
           >
-            <RefreshCw className={cn("w-3 h-3 mr-1", resetPending && "animate-spin")} /> Reset
-          </Button>
-        )}
+            <span>{manuallyDisabled ? "Off" : "On"}</span>
+            <Switch
+              checked={provider.enabled && !manuallyDisabled}
+              disabled={!provider.enabled || disablePending}
+              onCheckedChange={(checked) => onSetDisabled(provider.id, !checked)}
+            />
+          </label>
+        </div>
       </div>
     </div>
   );
